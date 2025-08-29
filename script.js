@@ -110,8 +110,16 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(FILE_TRANSLATE_URL, { method: 'POST', body: formData });
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Upstream error, please try a smaller file.`);
+                // Try to parse error JSON, but have a fallback
+                let errorMsg = 'An unknown server error occurred.';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || `HTTP error! status: ${response.status}`;
+                } catch (jsonError) {
+                    // This catches the "Unexpected token '<'" error
+                    errorMsg = 'Server returned an invalid response. Please try again.';
+                }
+                throw new Error(errorMsg);
             }
             completeProgress();
             const blob = await response.blob();
@@ -153,8 +161,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     target_lang: document.getElementById('text-target-lang').value
                 })
             });
+            if (!response.ok) {
+                let errorMsg = 'An unknown server error occurred.';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || `HTTP error! status: ${response.status}`;
+                } catch (jsonError) {
+                    errorMsg = 'Server returned an invalid response. Please try again.';
+                }
+                throw new Error(errorMsg);
+            }
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
             targetTextArea.value = data.translated_text;
         } catch (error) {
             targetTextArea.value = `Error: ${error.message}`;
