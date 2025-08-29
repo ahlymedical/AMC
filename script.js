@@ -119,10 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const a = document.createElement('a');
             a.href = downloadUrl;
             const contentDisposition = response.headers.get('content-disposition');
-            let filename = `translated_${file.name}.docx`;
-            if (contentDisposition) {
+            let filename = `translated_${file.name}`;
+             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-                if (filenameMatch.length > 1) filename = filenameMatch[1];
+                if (filenameMatch && filenameMatch.length > 1) {
+                    // Use the filename from the server, which includes the ".docx" extension
+                    filename = filenameMatch[1];
+                }
             }
             a.download = filename;
             document.body.appendChild(a);
