@@ -1,5 +1,5 @@
 /* ================================================================== */
-/* ============= CORPORATE ELEGANCE THEME - V11 FINAL ============= */
+/* ============= CORPORATE ELEGANCE THEME - V12 FINAL ============= */
 /* ================================================================== */
 
 :root {
@@ -119,7 +119,7 @@ select {
     0% { transform: translateX(-150%) skewX(-30deg); }
     100% { transform: translateX(300%) skewX(-30deg); }
 }
-.progress-container { width: 100%; display: none; }
+.progress-container { width: 100%; }
 .progress-info { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
 .progress-bar-background {
     height: 16px; background: var(--border-color);
@@ -147,10 +147,19 @@ select {
     box-shadow: 0 4px 15px rgba(225, 84, 35, 0.3);
 }
 .submit-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(225, 84, 35, 0.4); }
+.submit-btn:disabled { background: var(--text-secondary); cursor: not-allowed; box-shadow: none; }
 
-.text-areas { display: flex; gap: 1rem; }
+.download-btn {
+    background: linear-gradient(45deg, var(--accent-green-dark), var(--amc-green));
+    box-shadow: 0 4px 15px rgba(74, 118, 58, 0.3);
+}
+.download-btn:hover { box-shadow: 0 6px 20px rgba(74, 118, 58, 0.4); }
+
+/* --- FIX for Instant Text --- */
+.text-areas { display: flex; gap: 1rem; width: 100%; }
+.text-area-wrapper { flex: 1; display: flex; }
 textarea {
-    flex: 1; height: 200px; padding: 1rem; background: var(--text-light);
+    width: 100%; height: 200px; padding: 1rem; background: var(--text-light);
     border: 1px solid var(--border-color); border-radius: 8px;
     font-size: 1rem; resize: none;
 }
@@ -159,7 +168,9 @@ textarea {
     position: absolute; bottom: 1rem; right: 1rem; width: 40px; height: 40px;
     border-radius: 8px; background: #fff; border: 1px solid var(--border-color);
     cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background-color 0.2s;
 }
+#copy-btn:hover { background-color: #f0f0f0; }
 
 .app-footer { text-align: center; margin-top: 2rem; color: var(--text-secondary); font-size: 0.9rem; }
 .hidden { display: none !important; }
