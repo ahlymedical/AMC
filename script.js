@@ -123,7 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
              if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
                 if (filenameMatch && filenameMatch.length > 1) {
-                    // Use the filename from the server, which includes the ".docx" extension
                     filename = filenameMatch[1];
                 }
             }
