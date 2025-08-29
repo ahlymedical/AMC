@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fileWorkspace.style.display = 'none';
         textWorkspace.style.display = 'none';
         selectionScreen.style.display = 'flex';
-        resetFileUI(); // Reset file UI when going back
+        resetFileUI();
     }
 
     openDocButton.addEventListener('click', () => openWorkspace('file-translation'));
@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('file-input');
     const fileNameDisplay = document.getElementById('file-name-display');
     const uploadArea = document.getElementById('upload-area');
+    const fileErrorMsg = document.getElementById('file-error-msg'); // New error message element
     const translateFileBtn = document.getElementById('translate-file-btn');
     const downloadFileBtn = document.getElementById('download-file-btn');
     const progressContainer = document.getElementById('progress-container');
@@ -120,6 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
         translateFileBtn.classList.remove('hidden');
         translateFileBtn.disabled = false;
         downloadFileBtn.classList.add('hidden');
+        fileErrorMsg.classList.add('hidden'); // Hide error message on reset
+        uploadArea.classList.remove('error'); // Remove error class on reset
         translatedFileBlob = null;
         translatedFileName = '';
     }
@@ -127,7 +130,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Handlers ---
     async function handleFileSubmit(e) {
         e.preventDefault();
-        if (fileInput.files.length === 0) { alert('Please select a file first.'); return; }
+        fileErrorMsg.classList.add('hidden');
+        uploadArea.classList.remove('error');
+
+        // --- NEW VALIDATION LOGIC ---
+        if (fileInput.files.length === 0) {
+            fileErrorMsg.classList.remove('hidden');
+            uploadArea.classList.add('error');
+            setTimeout(() => { uploadArea.classList.remove('error'); }, 500); // Remove shake effect
+            return; // Stop the function
+        }
+
         const file = fileInput.files[0];
         const formData = new FormData(fileForm);
         
@@ -148,22 +161,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorMsg);
             }
             
-            // Store file blob and name for download
             translatedFileBlob = await response.blob();
             const contentDisposition = response.headers.get('content-disposition');
             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-                if (filenameMatch && filenameMatch.length > 1) {
-                    translatedFileName = filenameMatch[1];
-                } else {
-                    translatedFileName = `translated_${file.name}`;
-                }
+                translatedFileName = (filenameMatch && filenameMatch.length > 1) ? filenameMatch[1] : `translated_${file.name}`;
             } else {
                 translatedFileName = `translated_${file.name}`;
             }
-
             completeProgress();
-
         } catch (error) {
             failProgress(error.message);
         }
@@ -180,8 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
         a.click();
         window.URL.revokeObjectURL(downloadUrl);
         a.remove();
-        
-        // Reset UI after a short delay to allow download to start
         setTimeout(resetFileUI, 1500);
     }
 
@@ -215,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            resetFileUI(); // Reset UI for new file selection
+            resetFileUI();
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
@@ -247,7 +251,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     copyBtn.addEventListener('click', () => { 
         navigator.clipboard.writeText(targetTextArea.value);
-        // Optional: Add a visual feedback like "Copied!"
     });
     
     // --- Initial Setup ---
