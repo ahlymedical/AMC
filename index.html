@@ -15,6 +15,7 @@
             <img src="https://i.ibb.co/p91wYFv/AMC-LOGO-02.png" alt="AMC Logo" class="logo">
         </header>
         <main class="app-main">
+            <!-- Screen for choosing translation type -->
             <div id="selection-screen" class="selection-container">
                 <div class="title-container">
                     <h1><span class="en">AMC GlobalTranslate</span><span class="ar">الترجمة العالمية من شركة الأهلي للخدمات الطبية</span></h1>
@@ -39,6 +40,8 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Workspace for Document Translation -->
             <div id="file-translation" class="workspace">
                 <button class="back-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"></path></svg>
@@ -63,15 +66,18 @@
                             </span>
                         </label>
                     </div>
-                    <div id="progress-container" class="progress-container">
+                    <div id="progress-container" class="progress-container hidden">
                         <div class="progress-info"><span id="progress-text"></span><span id="time-estimate"></span></div>
                         <div class="progress-bar-background"><div id="progress-bar"></div></div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="submit-btn" id="translate-file-btn"><span><span class="en">Translate & Download</span><span class="ar">ترجم وحمّل</span></span></button>
+                        <button type="submit" class="submit-btn" id="translate-file-btn"><span><span class="en">Translate</span><span class="ar">ترجمة</span></span></button>
+                        <button type="button" class="submit-btn download-btn hidden" id="download-file-btn"><span><span class="en">Download Translated File</span><span class="ar">حمّل الملف المترجم</span></span></button>
                     </div>
                 </form>
             </div>
+
+            <!-- Workspace for Instant Text Translation -->
             <div id="text-translation" class="workspace">
                  <button class="back-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"></path></svg>
@@ -84,12 +90,16 @@
                         <select id="text-target-lang"></select>
                     </div>
                     <div class="text-areas">
-                        <textarea id="source-text" placeholder="Enter text... / أدخل النص..."></textarea>
-                        <div class="target-text-container">
-                            <textarea id="target-text" placeholder="Translation... / الترجمة..." readonly></textarea>
-                            <button id="copy-btn" type="button" title="Copy text">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                            </button>
+                        <div class="text-area-wrapper">
+                           <textarea id="source-text" placeholder="Enter text... / أدخل النص..."></textarea>
+                        </div>
+                        <div class="text-area-wrapper">
+                            <div class="target-text-container">
+                                <textarea id="target-text" placeholder="Translation... / الترجمة..." readonly></textarea>
+                                <button id="copy-btn" type="button" title="Copy text">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
