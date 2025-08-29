@@ -11,62 +11,98 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
+# --- إعداد التطبيق ---
+# Initialize the Flask application.
+# The static_folder is set to the root directory to serve files like index.html.
 app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app)
+CORS(app) # Enable Cross-Origin Resource Sharing for the app.
 
+# --- تهيئة نموذج Gemini ---
 model = None
 api_key_error = None
 try:
+    # Attempt to get the API key from environment variables. This is a secure way to handle keys.
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
     if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY environment variable not set or found.")
+        # If the key is not found, raise a clear error.
+        raise ValueError("خطأ فادح: متغير البيئة GEMINI_API_KEY غير موجود أو فارغ. يرجى إضافته إلى إعدادات الخادم.")
     
+    # Configure the generative AI model with the API key.
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-pro-latest') 
-    print("✅ Gemini API configured successfully with gemini-1.5-pro-latest model.")
+    print("✅ تم إعداد Gemini API بنجاح باستخدام نموذج gemini-1.5-pro-latest.")
+
 except Exception as e:
+    # Catch any exception during setup and store the error message.
     api_key_error = str(e)
-    print(f"!!!!!! FATAL ERROR during Gemini API setup: {api_key_error}")
+    print(f"!!!!!! خطأ فادح أثناء إعداد Gemini API: {api_key_error}")
+    # This print statement is crucial for debugging deployment issues.
+
+# --- دوال الترجمة الأساسية ---
 
 def translate_text_api(text_to_translate, target_lang):
+    """
+    Translates a given text chunk using the Gemini API.
+    Args:
+        text_to_translate (str): The text to be translated.
+        target_lang (str): The target language for translation.
+    Returns:
+        str: The translated text, or the original text if an error occurs.
+    """
     if not text_to_translate or not text_to_translate.strip():
-        return ""
+        return "" # Return empty if input is empty.
     try:
+        # Construct a professional prompt for the model.
         prompt = f"You are an expert multilingual translator. Translate the following text to {target_lang}. Understand the context professionally. Provide only the translated text, nothing else:\n\n{text_to_translate}"
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        print(f"--- API translation error for a chunk: {e}")
-        return text_to_translate
+        print(f"--- خطأ في ترجمة جزء من النص عبر الـ API: {e}")
+        return text_to_translate # Fallback to original text on error.
 
 def translate_docx_in_place(doc: DocxDocument, target_lang: str):
-    print("Starting in-place DOCX translation (paragraph by paragraph)...")
+    """
+    Translates the text within a DOCX document object paragraph by paragraph and table by table.
+    Args:
+        doc (DocxDocument): The python-docx document object.
+        target_lang (str): The target language.
+    Returns:
+        DocxDocument: The same document object with translated text.
+    """
+    print("بدء الترجمة المباشرة لملف DOCX (فقرة بفقرة)...")
     
+    # Translate paragraphs
     for para in doc.paragraphs:
-        if para.text.strip():
+        if para.text.strip(): # Only translate non-empty paragraphs.
             original_text = para.text
-            print(f"  Translating paragraph: '{original_text[:50]}...'")
+            print(f"  ترجمة فقرة: '{original_text[:50]}...'")
             translated_text = translate_text_api(original_text, target_lang)
             para.text = translated_text
 
+    # Translate tables
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
+                # Recursively translate text within each cell.
                 for para in cell.paragraphs:
                     if para.text.strip():
                         original_text = para.text
-                        print(f"  Translating table cell: '{original_text[:50]}...'")
+                        print(f"  ترجمة خلية في جدول: '{original_text[:50]}...'")
                         translated_text = translate_text_api(original_text, target_lang)
                         para.text = translated_text
                         
-    print("In-place DOCX translation finished.")
+    print("انتهت الترجمة المباشرة لملف DOCX.")
     return doc
 
+# --- دوال قراءة الملفات ---
+
 def read_text_from_pdf(stream):
+    """Extracts text from a PDF file stream."""
     reader = PyPDF2.PdfReader(stream)
     return '\n'.join([page.extract_text() for page in reader.pages if page.extract_text()])
 
 def read_text_from_pptx(stream):
+    """Extracts text from a PPTX file stream."""
     prs = Presentation(stream)
     text_runs = []
     for slide in prs.slides:
@@ -78,29 +114,40 @@ def read_text_from_pptx(stream):
     return '\n'.join(text_runs)
 
 def create_docx_from_text(text):
+    """Creates a new DOCX document in memory from a string of text."""
     mem_file = io.BytesIO()
     doc = docx.Document()
     doc.add_paragraph(text)
     doc.save(mem_file)
-    mem_file.seek(0)
+    mem_file.seek(0) # Rewind the buffer to the beginning.
     return mem_file
+
+# --- مسارات التطبيق (API Endpoints) ---
 
 @app.route('/')
 def serve_index():
+    """Serves the main index.html file."""
     return app.send_static_file('index.html')
 
 @app.route('/translate-file', methods=['POST'])
 def translate_file_handler():
-    if not model: return jsonify({"error": "API service is not configured."}), 500
-    if 'file' not in request.files: return jsonify({"error": "No file part in the request."}), 400
+    """Handles file translation requests."""
+    if not model:
+        # If the model failed to initialize, return a server error.
+        return jsonify({"error": f"خدمة الـ API غير مهيأة بشكل صحيح. السبب: {api_key_error}"}), 500
+    if 'file' not in request.files:
+        return jsonify({"error": "لم يتم العثور على ملف في الطلب."}), 400
     file = request.files['file']
-    if file.filename == '': return jsonify({"error": "No file selected."}), 400
+    if file.filename == '':
+        return jsonify({"error": "لم يتم تحديد أي ملف."}), 400
     
     filename = secure_filename(file.filename)
     target_lang = request.form.get('target_lang', 'English')
+    # The output will always be a .docx file for consistency.
     new_filename = f"translated_{os.path.splitext(filename)[0]}.docx"
     
     try:
+        # --- Logic for handling different file types ---
         if filename.lower().endswith('.docx'):
             original_doc = docx.Document(file.stream)
             translated_doc = translate_docx_in_place(original_doc, target_lang)
@@ -115,148 +162,49 @@ def translate_file_handler():
         elif filename.lower().endswith('.pptx'):
             text_to_translate = read_text_from_pptx(file.stream)
         elif filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+            # For images, use the multimodal capabilities of the Gemini model.
             image = Image.open(file.stream)
             prompt_parts = [f"Extract and translate the text in this image to {target_lang}. Provide only the translation.", image]
             response = model.generate_content(prompt_parts)
             text_to_translate = response.text
         else:
-            return jsonify({"error": "Unsupported file type."}), 400
+            return jsonify({"error": "نوع الملف غير مدعوم."}), 400
 
         if not text_to_translate.strip():
-            return jsonify({"error": "Could not extract text from the file."}), 400
+            return jsonify({"error": "لم يتمكن النظام من استخلاص أي نص من الملف."}), 400
 
+        # Translate the extracted text and create a new DOCX file.
         translated_doc_stream = create_docx_from_text(translate_text_api(text_to_translate, target_lang))
         return send_file(translated_doc_stream, as_attachment=True, download_name=new_filename, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
     except Exception as e:
-        print(f"!!!!!! CRITICAL ERROR during file processing for {filename}: {e}")
-        traceback.print_exc()
-        return jsonify({"error": "An internal server error occurred during file processing."}), 500
+        print(f"!!!!!! خطأ فادح أثناء معالجة الملف {filename}: {e}")
+        traceback.print_exc() # Print full traceback for detailed debugging.
+        return jsonify({"error": "حدث خطأ داخلي في الخادم أثناء معالجة الملف."}), 500
 
 @app.route('/translate-text', methods=['POST'])
 def translate_text_handler():
-    if not model: return jsonify({"error": "API service is not configured."}), 500
+    """Handles instant text translation requests."""
+    if not model:
+        return jsonify({"error": f"خدمة الـ API غير مهيأة بشكل صحيح. السبب: {api_key_error}"}), 500
+    
     data = request.get_json()
     text = data.get('text')
-    if not text: return jsonify({"error": "No text provided."}), 400
+    if not text:
+        return jsonify({"error": "لم يتم توفير أي نص للترجمة."}), 400
+    
     target_lang = data.get('target_lang', 'English')
+    
     try:
-        prompt = (f"Translate the following text to '{target_lang}'. Provide only the professional translated text.\n\n{text}")
-        response = model.generate_content(prompt)
-        return jsonify({"translated_text": response.text})
+        translated_text = translate_text_api(text, target_lang)
+        return jsonify({"translated_text": translated_text})
     except Exception as e:
-        print(f"!!!!!! An error occurred during text translation: {e}")
-        return jsonify({"error": "An internal error occurred during translation."}), 500
+        print(f"!!!!!! حدث خطأ أثناء ترجمة النص: {e}")
+        return jsonify({"error": "حدث خطأ داخلي أثناء عملية الترجمة."}), 500
 
+# --- تشغيل التطبيق ---
 if __name__ == "__main__":
+    # This block runs when the script is executed directly.
+    # It's used for local development. For deployment, a WSGI server like Gunicorn is used.
     port = int(os.environ.get('PORT', 8080))
-    app.run(debug=False, host='0.0.0.0', port=port)```
-
----
-
-#### الملف الرابع: `index.html` (الهيكل النهائي)
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMC GlobalTranslate | AI Translation Suite</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="app-container">
-        <header class="app-header">
-            <img src="https://i.ibb.co/p91wYFv/AMC-LOGO-02.png" alt="AMC Logo" class="logo">
-        </header>
-        <main class="app-main">
-            <div id="selection-screen" class="selection-container">
-                <div class="title-container">
-                    <h1><span class="en">AMC GlobalTranslate</span><span class="ar">الترجمة العالمية من شركة الأهلي للخدمات الطبية</span></h1>
-                    <p><span class="en">Professional AI Translation to Empower Your Business</span><span class="ar">ترجمة احترافية بالذكاء الاصطناعي لتمكين أعمالك</span></p>
-                </div>
-                <div class="action-buttons-container">
-                    <button id="open-doc-workspace" class="action-btn">
-                        <div class="btn-icon document-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20,2H8A2,2,0,0,0,6,4V16a2,2,0,0,0,2,2H20a2,2,0,0,0,2-2V4A2,2,0,0,0,20,2ZM14.1,15.5H12.9V12.42l-1.6,1.6L10.5,13.2l2-2a.54.54,0,0,1,.76,0l2,2-0.8.82-1.6-1.6ZM4,6H2V20a2,2,0,0,0,2,2H16V20H4Z"></path></svg>
-                        </div>
-                        <div class="btn-text">
-                            <h3><span class="en">Document Translation</span><span class="ar">ترجمة المستندات</span></h3>
-                        </div>
-                    </button>
-                    <button id="open-text-workspace" class="action-btn">
-                        <div class="btn-icon instant-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20.67,15.08l-3.39-3.39a1,1,0,0,0-1.41,0l-1.3,1.3a1,1,0,0,0,0,1.41l3.39,3.39a1,1,0,0,0,1.41,0l1.3-1.3A1,1,0,0,0,20.67,15.08ZM8.92,3.33a1,1,0,0,0,0,1.41l1.3,1.3a1,1,0,0,0,1.41,0l3.39-3.39a1,1,0,0,0,0-1.41l-1.3-1.3a1,1,0,0,0-1.41,0Zm1.41,10.34a1,1,0,0,0-1.41,0L2.29,20.29a1,1,0,0,0,0,1.41l.59.59a1,1,0,0,0,1.41,0L10.92,15.7a1,1,0,0,0,0-1.41Z"></path></svg>
-                        </div>
-                        <div class="btn-text">
-                            <h3><span class="en">Instant Text</span><span class="ar">الترجمة الفورية</span></h3>
-                        </div>
-                    </button>
-                </div>
-            </div>
-            <div id="file-translation" class="workspace">
-                <button class="back-btn">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"></path></svg>
-                    <span>Back / عودة</span>
-                </button>
-                <h2 class="workspace-title"><span class="en">Document Translation</span><span class="ar">ترجمة المستندات</span></h2>
-                <form id="file-upload-form" class="translation-form">
-                    <div class="language-selectors">
-                        <select id="file-source-lang" name="source_lang"></select>
-                        <select id="file-target-lang" name="target_lang"></select>
-                    </div>
-                    <div class="upload-area" id="upload-area">
-                        <input type="file" id="file-input" name="file" accept=".docx,.pdf,.png,.jpg,.jpeg,.pptx" hidden>
-                        <label for="file-input" class="upload-label">
-                            <div class="upload-icon-wrapper">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                            </div>
-                            <span id="file-name-display" class="upload-text">
-                                <span class="en"><b>Click to upload</b> or drag & drop a file</span>
-                                <span class="ar"><b>انقر للرفع</b> أو قم بسحب وإفلات الملف</span>
-                                <small>(docx, pptx, pdf, png, jpg)</small>
-                            </span>
-                        </label>
-                    </div>
-                    <div id="progress-container" class="progress-container">
-                        <div class="progress-info"><span id="progress-text"></span><span id="time-estimate"></span></div>
-                        <div class="progress-bar-background"><div id="progress-bar"></div></div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="submit-btn" id="translate-file-btn"><span><span class="en">Translate & Download</span><span class="ar">ترجم وحمّل</span></span></button>
-                    </div>
-                </form>
-            </div>
-            <div id="text-translation" class="workspace">
-                 <button class="back-btn">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"></path></svg>
-                    <span>Back / عودة</span>
-                </button>
-                <h2 class="workspace-title"><span class="en">Instant Text</span><span class="ar">الترجمة الفورية</span></h2>
-                <div class="translation-form">
-                     <div class="language-selectors">
-                        <select id="text-source-lang"></select>
-                        <select id="text-target-lang"></select>
-                    </div>
-                    <div class="text-areas">
-                        <textarea id="source-text" placeholder="Enter text... / أدخل النص..."></textarea>
-                        <div class="target-text-container">
-                            <textarea id="target-text" placeholder="Translation... / الترجمة..." readonly></textarea>
-                            <button id="copy-btn" type="button" title="Copy text">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-        <footer class="app-footer">
-             <p><span class="en">Developed by <b>Al Ahly Medical Company Marketing Team</b></span><span class="ar">تم التطوير بواسطة <b>فريق شركة الاهلي للخدمات الطبية</b></span></p>
-        </footer>
-    </div>
-    <script src="script.js"></script>
-</body>
-</html>
+    app.run(debug=False, host='0.0.0.0', port=port)
