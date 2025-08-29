@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Element Selections ---
     const selectionScreen = document.getElementById('selection-screen');
     const fileWorkspace = document.getElementById('file-translation');
     const textWorkspace = document.getElementById('text-translation');
@@ -6,13 +7,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const openTextButton = document.getElementById('open-text-workspace');
     const backButtons = document.querySelectorAll('.back-btn');
 
+    // --- Navigation Logic ---
     function openWorkspace(workspaceId) {
         selectionScreen.style.display = 'none';
-        fileWorkspace.style.display = 'none';
-        textWorkspace.style.display = 'none';
+        fileWorkspace.classList.add('hidden');
+        textWorkspace.classList.add('hidden');
         if (workspaceId === 'file-translation') {
+            fileWorkspace.classList.remove('hidden');
             fileWorkspace.style.display = 'flex';
         } else {
+            textWorkspace.classList.remove('hidden');
             textWorkspace.style.display = 'flex';
         }
     }
@@ -21,30 +25,39 @@ document.addEventListener('DOMContentLoaded', () => {
         fileWorkspace.style.display = 'none';
         textWorkspace.style.display = 'none';
         selectionScreen.style.display = 'flex';
+        resetFileUI(); // Reset file UI when going back
     }
 
     openDocButton.addEventListener('click', () => openWorkspace('file-translation'));
     openTextButton.addEventListener('click', () => openWorkspace('text-translation'));
     backButtons.forEach(button => button.addEventListener('click', showSelectionScreen));
 
+    // --- API Endpoints ---
     const FILE_TRANSLATE_URL = '/translate-file';
     const TEXT_TRANSLATE_URL = '/translate-text';
 
+    // --- File Translation Elements & State ---
     const fileForm = document.getElementById('file-upload-form');
     const fileInput = document.getElementById('file-input');
     const fileNameDisplay = document.getElementById('file-name-display');
     const uploadArea = document.getElementById('upload-area');
     const translateFileBtn = document.getElementById('translate-file-btn');
+    const downloadFileBtn = document.getElementById('download-file-btn');
     const progressContainer = document.getElementById('progress-container');
     const progressBar = document.getElementById('progress-bar');
     const progressText = document.getElementById('progress-text');
     const timeEstimate = document.getElementById('time-estimate');
+    
+    let progressInterval = null;
+    let translatedFileBlob = null;
+    let translatedFileName = '';
+
+    // --- Text Translation Elements ---
     const sourceTextArea = document.getElementById('source-text');
     const targetTextArea = document.getElementById('target-text');
     const copyBtn = document.getElementById('copy-btn');
     
-    let progressInterval = null;
-
+    // --- Language Population ---
     const languages = { 'Arabic': 'ar', 'English': 'en', 'French': 'fr', 'German': 'de', 'Spanish': 'es', 'Italian': 'it', 'Portuguese': 'pt', 'Dutch': 'nl', 'Russian': 'ru', 'Turkish': 'tr', 'Japanese': 'ja', 'Korean': 'ko', 'Chinese (Simplified)': 'zh-CN', 'Hindi': 'hi', 'Indonesian': 'id', 'Polish': 'pl', 'Swedish': 'sv', 'Vietnamese': 'vi' };
     
     function populateLanguageSelectors() {
@@ -57,11 +70,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('text-target-lang').value = 'Arabic';
     }
     
+    // --- File Translation UI Management ---
     function startProgressSimulation(fileSize) {
         const estimatedDuration = 10 + (fileSize / 1024 / 1024) * 15;
         let progress = 0;
         let elapsed = 0;
-        progressContainer.style.display = 'block';
+        progressContainer.classList.remove('hidden');
         progressBar.style.width = '0%';
         progressBar.style.background = '';
         progressText.textContent = `Processing... 0%`;
@@ -81,7 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(progressInterval);
         progressBar.style.width = '100%';
         progressText.textContent = 'Success!';
-        timeEstimate.textContent = 'Download starting...';
+        timeEstimate.textContent = 'Ready to download.';
+        translateFileBtn.classList.add('hidden');
+        downloadFileBtn.classList.remove('hidden');
     }
     
     function failProgress(errorMessage) {
@@ -89,6 +105,9 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.background = 'var(--amc-orange)';
         progressText.textContent = `Error: ${errorMessage}`;
         timeEstimate.textContent = 'Please try again.';
+        translateFileBtn.disabled = false;
+        translateFileBtn.classList.remove('hidden');
+        downloadFileBtn.classList.add('hidden');
     }
     
     function resetFileUI() {
@@ -97,59 +116,81 @@ document.addEventListener('DOMContentLoaded', () => {
         const arText = fileNameDisplay.querySelector('.ar b');
         if(enText) enText.textContent = 'Click to upload';
         if(arText) arText.textContent = 'انقر للرفع';
-        progressContainer.style.display = 'none';
+        progressContainer.classList.add('hidden');
+        translateFileBtn.classList.remove('hidden');
+        translateFileBtn.disabled = false;
+        downloadFileBtn.classList.add('hidden');
+        translatedFileBlob = null;
+        translatedFileName = '';
     }
 
+    // --- Event Handlers ---
     async function handleFileSubmit(e) {
         e.preventDefault();
         if (fileInput.files.length === 0) { alert('Please select a file first.'); return; }
         const file = fileInput.files[0];
         const formData = new FormData(fileForm);
+        
         translateFileBtn.disabled = true;
+        downloadFileBtn.classList.add('hidden');
         startProgressSimulation(file.size);
+
         try {
             const response = await fetch(FILE_TRANSLATE_URL, { method: 'POST', body: formData });
             if (!response.ok) {
-                // Try to parse error JSON, but have a fallback
                 let errorMsg = 'An unknown server error occurred.';
                 try {
                     const errorData = await response.json();
                     errorMsg = errorData.error || `HTTP error! status: ${response.status}`;
                 } catch (jsonError) {
-                    // This catches the "Unexpected token '<'" error
                     errorMsg = 'Server returned an invalid response. Please try again.';
                 }
                 throw new Error(errorMsg);
             }
-            completeProgress();
-            const blob = await response.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = downloadUrl;
+            
+            // Store file blob and name for download
+            translatedFileBlob = await response.blob();
             const contentDisposition = response.headers.get('content-disposition');
-            let filename = `translated_${file.name}`;
-             if (contentDisposition) {
+            if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
                 if (filenameMatch && filenameMatch.length > 1) {
-                    filename = filenameMatch[1];
+                    translatedFileName = filenameMatch[1];
+                } else {
+                    translatedFileName = `translated_${file.name}`;
                 }
+            } else {
+                translatedFileName = `translated_${file.name}`;
             }
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(downloadUrl);
-            setTimeout(resetFileUI, 2000);
+
+            completeProgress();
+
         } catch (error) {
             failProgress(error.message);
-        } finally {
-            translateFileBtn.disabled = false;
         }
+    }
+
+    function handleFileDownload() {
+        if (!translatedFileBlob || !translatedFileName) return;
+        const downloadUrl = window.URL.createObjectURL(translatedFileBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        a.download = translatedFileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        a.remove();
+        
+        // Reset UI after a short delay to allow download to start
+        setTimeout(resetFileUI, 1500);
     }
 
     async function handleTextTranslation() {
         const text = sourceTextArea.value.trim();
-        if (!text) return;
+        if (!text) {
+            targetTextArea.value = '';
+            return;
+        }
         targetTextArea.placeholder = "Translating...";
         try {
             const response = await fetch(TEXT_TRANSLATE_URL, {
@@ -162,14 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
             if (!response.ok) {
-                let errorMsg = 'An unknown server error occurred.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || `HTTP error! status: ${response.status}`;
-                } catch (jsonError) {
-                    errorMsg = 'Server returned an invalid response. Please try again.';
-                }
-                throw new Error(errorMsg);
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Server error');
             }
             const data = await response.json();
             targetTextArea.value = data.translated_text;
@@ -180,31 +215,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
+            resetFileUI(); // Reset UI for new file selection
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
             if(enText) enText.textContent = file.name;
             if(arText) arText.textContent = '';
-            progressContainer.style.display = 'none';
         }
     });
 
+    // --- Event Listeners ---
     uploadArea.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.add('dragover'); });
     uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.add('dragover'); });
     uploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.remove('dragover'); });
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault(); e.stopPropagation();
         uploadArea.classList.remove('dragover');
-        fileInput.files = e.dataTransfer.files;
-        fileInput.dispatchEvent(new Event('change'));
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            fileInput.dispatchEvent(new Event('change'));
+        }
     });
 
     fileForm.addEventListener('submit', handleFileSubmit);
+    downloadFileBtn.addEventListener('click', handleFileDownload);
+    
     let debounceTimer;
-    sourceTextArea.addEventListener('input', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(handleTextTranslation, 500); });
-    copyBtn.addEventListener('click', () => { navigator.clipboard.writeText(targetTextArea.value); });
+    sourceTextArea.addEventListener('input', () => { 
+        clearTimeout(debounceTimer); 
+        debounceTimer = setTimeout(handleTextTranslation, 500); 
+    });
+    copyBtn.addEventListener('click', () => { 
+        navigator.clipboard.writeText(targetTextArea.value);
+        // Optional: Add a visual feedback like "Copied!"
+    });
     
+    // --- Initial Setup ---
     populateLanguageSelectors();
-    
     showSelectionScreen();
 });
