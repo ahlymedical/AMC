@@ -4,6 +4,8 @@ import traceback
 import google.generativeai as genai
 import docx 
 from docx.document import Document as DocxDocument
+from docx.text.paragraph import Paragraph
+from docx.table import _Cell
 import PyPDF2
 from PIL import Image
 from pptx import Presentation
@@ -12,106 +14,118 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 # --- إعداد التطبيق ---
-# Initialize the Flask application.
-# The static_folder is set to the root directory to serve files like index.html.
 app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app) # Enable Cross-Origin Resource Sharing for the app.
+CORS(app)
 
 # --- تهيئة نموذج Gemini ---
 model = None
 api_key_error = None
 try:
-    # Attempt to get the API key from environment variables. This is a secure way to handle keys.
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
     if not GEMINI_API_KEY:
-        # If the key is not found, raise a clear error.
         raise ValueError("خطأ فادح: متغير البيئة GEMINI_API_KEY غير موجود أو فارغ. يرجى إضافته إلى إعدادات الخادم.")
     
-    # Configure the generative AI model with the API key.
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-pro-latest') 
     print("✅ تم إعداد Gemini API بنجاح باستخدام نموذج gemini-1.5-pro-latest.")
 
 except Exception as e:
-    # Catch any exception during setup and store the error message.
     api_key_error = str(e)
     print(f"!!!!!! خطأ فادح أثناء إعداد Gemini API: {api_key_error}")
-    # This print statement is crucial for debugging deployment issues.
 
 # --- دوال الترجمة الأساسية ---
 
 def translate_text_api(text_to_translate, target_lang):
     """
-    Translates a given text chunk using the Gemini API.
-    Args:
-        text_to_translate (str): The text to be translated.
-        target_lang (str): The target language for translation.
-    Returns:
-        str: The translated text, or the original text if an error occurs.
+    Translates a given text chunk using the Gemini API with an improved prompt.
     """
     if not text_to_translate or not text_to_translate.strip():
-        return "" # Return empty if input is empty.
+        return ""
     try:
-        # Construct a professional prompt for the model.
-        prompt = f"You are an expert multilingual translator. Translate the following text to {target_lang}. Understand the context professionally. Provide only the translated text, nothing else:\n\n{text_to_translate}"
+        # Prompt محسن لضمان فهم السياق والاحتفاظ بالنبرة الاحترافية
+        prompt = f"""As a master translator, provide a professional and context-aware translation of the following text into {target_lang}. 
+Your output must be ONLY the translated text, preserving the original tone and meaning. 
+Do not add any extra explanations or introductory phrases.
+
+Original Text:
+\"\"\"{text_to_translate}\"\"\""""
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
         print(f"--- خطأ في ترجمة جزء من النص عبر الـ API: {e}")
-        return text_to_translate # Fallback to original text on error.
+        return text_to_translate
 
 def translate_docx_in_place(doc: DocxDocument, target_lang: str):
     """
-    Translates the text within a DOCX document object paragraph by paragraph and table by table.
-    Args:
-        doc (DocxDocument): The python-docx document object.
-        target_lang (str): The target language.
-    Returns:
-        DocxDocument: The same document object with translated text.
+    Translates DOCX text run-by-run to preserve intra-paragraph formatting (bold, color, etc.).
     """
-    print("بدء الترجمة المباشرة لملف DOCX (فقرة بفقرة)...")
+    print("بدء الترجمة المباشرة لملف DOCX (مع الحفاظ على التنسيق الدقيق)...")
     
-    # Translate paragraphs
+    # Translate paragraphs by iterating through runs
     for para in doc.paragraphs:
-        if para.text.strip(): # Only translate non-empty paragraphs.
-            original_text = para.text
-            print(f"  ترجمة فقرة: '{original_text[:50]}...'")
-            translated_text = translate_text_api(original_text, target_lang)
-            para.text = translated_text
+        for run in para.runs:
+            if run.text.strip():
+                original_text = run.text
+                print(f"  ترجمة جزء من النص في Word: '{original_text[:50]}...'")
+                translated_text = translate_text_api(original_text, target_lang)
+                run.text = translated_text
 
-    # Translate tables
+    # Translate tables by iterating through cells and then runs
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                # Recursively translate text within each cell.
                 for para in cell.paragraphs:
-                    if para.text.strip():
-                        original_text = para.text
-                        print(f"  ترجمة خلية في جدول: '{original_text[:50]}...'")
-                        translated_text = translate_text_api(original_text, target_lang)
-                        para.text = translated_text
+                    for run in para.runs:
+                        if run.text.strip():
+                            original_text = run.text
+                            print(f"  ترجمة جزء من نص في جدول Word: '{original_text[:50]}...'")
+                            translated_text = translate_text_api(original_text, target_lang)
+                            run.text = translated_text
                         
     print("انتهت الترجمة المباشرة لملف DOCX.")
     return doc
 
-# --- دوال قراءة الملفات ---
-
-def read_text_from_pdf(stream):
-    """Extracts text from a PDF file stream."""
-    reader = PyPDF2.PdfReader(stream)
-    return '\n'.join([page.extract_text() for page in reader.pages if page.extract_text()])
-
-def read_text_from_pptx(stream):
-    """Extracts text from a PPTX file stream."""
-    prs = Presentation(stream)
-    text_runs = []
+def translate_pptx_in_place(prs: Presentation, target_lang: str):
+    """
+    [ميزة جديدة]
+    Translates PPTX text run-by-run to preserve all formatting, layout, and images.
+    """
+    print("بدء الترجمة المباشرة لملف PowerPoint (مع الحفاظ على التصميم)...")
+    
+    # Iterate through slides, shapes, and text runs
     for slide in prs.slides:
         for shape in slide.shapes:
+            # Handle regular text boxes and shapes
             if shape.has_text_frame:
                 for paragraph in shape.text_frame.paragraphs:
                     for run in paragraph.runs:
-                        text_runs.append(run.text)
-    return '\n'.join(text_runs)
+                        if run.text.strip():
+                            original_text = run.text
+                            print(f"  ترجمة نص في شريحة PowerPoint: '{original_text[:50]}...'")
+                            translated_text = translate_text_api(original_text, target_lang)
+                            run.text = translated_text
+            
+            # Handle tables
+            if shape.has_table:
+                for row in shape.table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.text_frame.paragraphs:
+                            for run in paragraph.runs:
+                                if run.text.strip():
+                                    original_text = run.text
+                                    print(f"  ترجمة نص في جدول PowerPoint: '{original_text[:50]}...'")
+                                    translated_text = translate_text_api(original_text, target_lang)
+                                    run.text = translated_text
+
+    print("انتهت الترجمة المباشرة لملف PowerPoint.")
+    return prs
+
+# --- دوال قراءة الملفات ---
+
+def read_text_from_pdf(stream):
+    """Extracts plain text from a PDF. NOTE: All formatting is lost."""
+    reader = PyPDF2.PdfReader(stream)
+    return '\n'.join([page.extract_text() for page in reader.pages if page.extract_text()])
 
 def create_docx_from_text(text):
     """Creates a new DOCX document in memory from a string of text."""
@@ -119,21 +133,18 @@ def create_docx_from_text(text):
     doc = docx.Document()
     doc.add_paragraph(text)
     doc.save(mem_file)
-    mem_file.seek(0) # Rewind the buffer to the beginning.
+    mem_file.seek(0)
     return mem_file
 
 # --- مسارات التطبيق (API Endpoints) ---
 
 @app.route('/')
 def serve_index():
-    """Serves the main index.html file."""
     return app.send_static_file('index.html')
 
 @app.route('/translate-file', methods=['POST'])
 def translate_file_handler():
-    """Handles file translation requests."""
     if not model:
-        # If the model failed to initialize, return a server error.
         return jsonify({"error": f"خدمة الـ API غير مهيأة بشكل صحيح. السبب: {api_key_error}"}), 500
     if 'file' not in request.files:
         return jsonify({"error": "لم يتم العثور على ملف في الطلب."}), 400
@@ -143,8 +154,6 @@ def translate_file_handler():
     
     filename = secure_filename(file.filename)
     target_lang = request.form.get('target_lang', 'English')
-    # The output will always be a .docx file for consistency.
-    new_filename = f"translated_{os.path.splitext(filename)[0]}.docx"
     
     try:
         # --- Logic for handling different file types ---
@@ -154,15 +163,23 @@ def translate_file_handler():
             mem_file = io.BytesIO()
             translated_doc.save(mem_file)
             mem_file.seek(0)
+            new_filename = f"translated_{os.path.splitext(filename)[0]}.docx"
             return send_file(mem_file, as_attachment=True, download_name=new_filename, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
+        elif filename.lower().endswith('.pptx'):
+            original_prs = Presentation(file.stream)
+            translated_prs = translate_pptx_in_place(original_prs, target_lang)
+            mem_file = io.BytesIO()
+            translated_prs.save(mem_file)
+            mem_file.seek(0)
+            new_filename = f"translated_{os.path.splitext(filename)[0]}.pptx"
+            return send_file(mem_file, as_attachment=True, download_name=new_filename, mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+
+        # Fallback for non-editable formats (PDF, Images)
         text_to_translate = ""
         if filename.lower().endswith('.pdf'):
             text_to_translate = read_text_from_pdf(file.stream)
-        elif filename.lower().endswith('.pptx'):
-            text_to_translate = read_text_from_pptx(file.stream)
         elif filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-            # For images, use the multimodal capabilities of the Gemini model.
             image = Image.open(file.stream)
             prompt_parts = [f"Extract and translate the text in this image to {target_lang}. Provide only the translation.", image]
             response = model.generate_content(prompt_parts)
@@ -173,28 +190,24 @@ def translate_file_handler():
         if not text_to_translate.strip():
             return jsonify({"error": "لم يتمكن النظام من استخلاص أي نص من الملف."}), 400
 
-        # Translate the extracted text and create a new DOCX file.
         translated_doc_stream = create_docx_from_text(translate_text_api(text_to_translate, target_lang))
+        new_filename = f"translated_{os.path.splitext(filename)[0]}.docx"
         return send_file(translated_doc_stream, as_attachment=True, download_name=new_filename, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
     except Exception as e:
         print(f"!!!!!! خطأ فادح أثناء معالجة الملف {filename}: {e}")
-        traceback.print_exc() # Print full traceback for detailed debugging.
+        traceback.print_exc()
         return jsonify({"error": "حدث خطأ داخلي في الخادم أثناء معالجة الملف."}), 500
 
 @app.route('/translate-text', methods=['POST'])
 def translate_text_handler():
-    """Handles instant text translation requests."""
     if not model:
         return jsonify({"error": f"خدمة الـ API غير مهيأة بشكل صحيح. السبب: {api_key_error}"}), 500
-    
     data = request.get_json()
     text = data.get('text')
     if not text:
         return jsonify({"error": "لم يتم توفير أي نص للترجمة."}), 400
-    
     target_lang = data.get('target_lang', 'English')
-    
     try:
         translated_text = translate_text_api(text, target_lang)
         return jsonify({"translated_text": translated_text})
@@ -204,7 +217,5 @@ def translate_text_handler():
 
 # --- تشغيل التطبيق ---
 if __name__ == "__main__":
-    # This block runs when the script is executed directly.
-    # It's used for local development. For deployment, a WSGI server like Gunicorn is used.
     port = int(os.environ.get('PORT', 8080))
     app.run(debug=False, host='0.0.0.0', port=port)
