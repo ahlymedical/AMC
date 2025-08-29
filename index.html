@@ -10,37 +10,23 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
     <div class="app-container">
-        
         <header class="app-header">
             <img src="https://i.ibb.co/p91wYFv/AMC-LOGO-02.png" alt="AMC Logo" class="logo">
         </header>
-
         <main class="app-main">
-
-            <!-- ======================= MAIN SELECTION SCREEN ======================= -->
             <div id="selection-screen" class="selection-container">
                 <div class="title-container">
-                    <h1>
-                        <span class="en">AMC GlobalTranslate</span>
-                        <span class="ar">الترجمة العالمية من شركة الأهلي للخدمات الطبية</span>
-                    </h1>
-                    <p>
-                        <span class="en">Professional AI Translation to Empower Your Business</span>
-                        <span class="ar">ترجمة احترافية بالذكاء الاصطناعي لتمكين أعمالك</span>
-                    </p>
+                    <h1><span class="en">AMC GlobalTranslate</span><span class="ar">الترجمة العالمية من شركة الأهلي للخدمات الطبية</span></h1>
+                    <p><span class="en">Professional AI Translation to Empower Your Business</span><span class="ar">ترجمة احترافية بالذكاء الاصطناعي لتمكين أعمالك</span></p>
                 </div>
                 <div class="action-buttons-container">
                     <button id="open-doc-workspace" class="action-btn">
                         <div class="btn-icon document-icon">
-                            <svg xmlns="http://www.w.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20,2H8A2,2,0,0,0,6,4V16a2,2,0,0,0,2,2H20a2,2,0,0,0,2-2V4A2,2,0,0,0,20,2ZM14.1,15.5H12.9V12.42l-1.6,1.6L10.5,13.2l2-2a.54.54,0,0,1,.76,0l2,2-0.8.82-1.6-1.6ZM4,6H2V20a2,2,0,0,0,2,2H16V20H4Z"></path></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20,2H8A2,2,0,0,0,6,4V16a2,2,0,0,0,2,2H20a2,2,0,0,0,2-2V4A2,2,0,0,0,20,2ZM14.1,15.5H12.9V12.42l-1.6,1.6L10.5,13.2l2-2a.54.54,0,0,1,.76,0l2,2-0.8.82-1.6-1.6ZM4,6H2V20a2,2,0,0,0,2,2H16V20H4Z"></path></svg>
                         </div>
                         <div class="btn-text">
-                            <h3>
-                                <span class="en">Document Translation</span>
-                                <span class="ar">ترجمة المستندات</span>
-                            </h3>
+                            <h3><span class="en">Document Translation</span><span class="ar">ترجمة المستندات</span></h3>
                         </div>
                     </button>
                     <button id="open-text-workspace" class="action-btn">
@@ -48,25 +34,17 @@
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20.67,15.08l-3.39-3.39a1,1,0,0,0-1.41,0l-1.3,1.3a1,1,0,0,0,0,1.41l3.39,3.39a1,1,0,0,0,1.41,0l1.3-1.3A1,1,0,0,0,20.67,15.08ZM8.92,3.33a1,1,0,0,0,0,1.41l1.3,1.3a1,1,0,0,0,1.41,0l3.39-3.39a1,1,0,0,0,0-1.41l-1.3-1.3a1,1,0,0,0-1.41,0Zm1.41,10.34a1,1,0,0,0-1.41,0L2.29,20.29a1,1,0,0,0,0,1.41l.59.59a1,1,0,0,0,1.41,0L10.92,15.7a1,1,0,0,0,0-1.41Z"></path></svg>
                         </div>
                         <div class="btn-text">
-                            <h3>
-                                <span class="en">Instant Text</span>
-                                <span class="ar">الترجمة الفورية</span>
-                            </h3>
+                            <h3><span class="en">Instant Text</span><span class="ar">الترجمة الفورية</span></h3>
                         </div>
                     </button>
                 </div>
             </div>
-
-            <!-- ======================= DOCUMENT TRANSLATION WORKSPACE ======================= -->
             <div id="file-translation" class="workspace">
                 <button class="back-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"></path></svg>
                     <span>Back / عودة</span>
                 </button>
-                <h2 class="workspace-title">
-                    <span class="en">Document Translation</span>
-                    <span class="ar">ترجمة المستندات</span>
-                </h2>
+                <h2 class="workspace-title"><span class="en">Document Translation</span><span class="ar">ترجمة المستندات</span></h2>
                 <form id="file-upload-form" class="translation-form">
                     <div class="language-selectors">
                         <select id="file-source-lang" name="source_lang"></select>
@@ -85,38 +63,21 @@
                             </span>
                         </label>
                     </div>
-                    <div id="progress-container" class="progress-container hidden">
+                    <div id="progress-container" class="progress-container">
                         <div class="progress-info"><span id="progress-text"></span><span id="time-estimate"></span></div>
                         <div class="progress-bar-background"><div id="progress-bar"></div></div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="submit-btn" id="translate-file-btn">
-                            <span>
-                                <span class="en">Translate File</span>
-                                <span class="ar">ترجمة الملف</span>
-                            </span>
-                        </button>
-                        <button type="button" class="download-btn hidden" id="download-ready-btn">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V12H4V19Z"></path></svg>
-                            <span>
-                                <span class="en">Download Translated File</span>
-                                <span class="ar">تحميل الملف المترجم</span>
-                            </span>
-                        </button>
+                        <button type="submit" class="submit-btn" id="translate-file-btn"><span><span class="en">Translate & Download</span><span class="ar">ترجم وحمّل</span></span></button>
                     </div>
                 </form>
             </div>
-
-            <!-- ======================= INSTANT TEXT WORKSPACE ======================= -->
             <div id="text-translation" class="workspace">
                  <button class="back-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"></path></svg>
                     <span>Back / عودة</span>
                 </button>
-                <h2 class="workspace-title">
-                    <span class="en">Instant Text</span>
-                    <span class="ar">الترجمة الفورية</span>
-                </h2>
+                <h2 class="workspace-title"><span class="en">Instant Text</span><span class="ar">الترجمة الفورية</span></h2>
                 <div class="translation-form">
                      <div class="language-selectors">
                         <select id="text-source-lang"></select>
@@ -134,16 +95,10 @@
                 </div>
             </div>
         </main>
-        
         <footer class="app-footer">
-             <p>
-                <span class="en">Developed by <b>Al Ahly Medical Company Marketing Team</b></span>
-                <span class="ar">تم التطوير بواسطة <b>فريق شركة الاهلي للخدمات الطبية</b></span>
-            </p>
+             <p><span class="en">Developed by <b>Al Ahly Medical Company Marketing Team</b></span><span class="ar">تم التطوير بواسطة <b>فريق شركة الاهلي للخدمات الطبية</b></span></p>
         </footer>
-
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
