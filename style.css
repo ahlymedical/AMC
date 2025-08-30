@@ -1,5 +1,5 @@
 /* ================================================================== */
-/* ============= CORPORATE ELEGANCE THEME - V13 FINAL ============= */
+/* ============= CORPORATE ELEGANCE THEME - V14 FINAL ============= */
 /* ================================================================== */
 
 :root {
@@ -11,7 +11,7 @@
     --text-primary: #1e293b;
     --text-secondary: #64748b;
     --text-light: #f8fafc;
-    --border-color: #e2e8f0;
+    --border-color: #e2e8f0; /* This is the light grey color */
     --accent-green-light: #4ade80;
     --accent-green-dark: #16a34a; 
     --error-red: #ef4444;
@@ -107,7 +107,6 @@ select {
     border-radius: 8px; cursor: pointer;
 }
 
-/* --- CENTERING & ICON STYLES --- */
 .upload-area {
     border: 2px dashed var(--border-color); border-radius: 12px;
     padding: 2rem; transition: all 0.3s ease;
@@ -115,8 +114,8 @@ select {
 .upload-area.dragover { border-color: var(--amc-orange); background-color: #fff8f5; }
 .upload-label { 
     cursor: pointer; display: flex; flex-direction: column; 
-    align-items: center; justify-content: center; /* Center content */
-    gap: 1rem; color: var(--text-secondary); text-align: center; /* Center text */
+    align-items: center; justify-content: center;
+    gap: 1rem; color: var(--text-secondary); text-align: center;
 }
 .upload-icon {
     width: 48px; height: 48px; color: var(--text-secondary);
@@ -124,7 +123,6 @@ select {
 }
 .upload-text b { color: var(--text-primary); }
 
-/* --- ERROR STYLES --- */
 .upload-area.error {
     border-color: var(--error-red);
     animation: shake 0.5s;
@@ -138,7 +136,7 @@ select {
     color: var(--error-red);
     font-size: 0.9rem;
     text-align: center;
-    margin-top: -0.5rem; /* Pull up closer to the upload box */
+    margin-top: -0.5rem;
     margin-bottom: 0.5rem;
 }
 
@@ -148,9 +146,13 @@ select {
 }
 .progress-container { width: 100%; }
 .progress-info { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
+/* --- THE FIX IS HERE --- */
 .progress-bar-background {
-    height: 16px; background: var(--border-color);
-    border-radius: 16px; overflow: hidden; position: relative;
+    height: 16px; 
+    background: var(--border-color); /* The background is now light grey */
+    border-radius: 16px; 
+    overflow: hidden; 
+    position: relative;
 }
 .progress-bar {
     width: 0%; height: 100%;
