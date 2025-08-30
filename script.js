@@ -82,8 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- UI Management ---
     function startProgressSimulation(fileSize) {
-        // (هذه الدالة تظهر شريط التقدم وتحاكي عملية التحميل)
-        const estimatedDuration = 10 + (fileSize / 1024 / 1024) * 15; // Base 10s + 15s per MB
+        const estimatedDuration = 10 + (fileSize / 1024 / 1024) * 15;
         let progress = 0;
         let elapsed = 0;
         progressContainer.classList.remove('hidden');
@@ -106,7 +105,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function completeProgress() {
-        // (هذه الدالة تظهر عند اكتمال الترجمة بنجاح)
         clearInterval(progressInterval);
         progressBar.style.width = '100%';
         progressText.textContent = 'Success!';
@@ -116,7 +114,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function failProgress(errorMessage) {
-        // (هذه الدالة تظهر عند حدوث خطأ)
         clearInterval(progressInterval);
         progressContainer.classList.remove('hidden');
         progressBar.style.background = 'var(--amc-orange)';
@@ -161,7 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(FILE_TRANSLATE_URL, { method: 'POST', body: formData });
 
             if (!response.ok) {
-                // إذا فشل الطلب، حاول قراءة رسالة الخطأ كـ JSON
                 let errorMsg = 'An unknown server error occurred.';
                 try {
                     const errorData = await response.json();
@@ -172,7 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorMsg);
             }
 
-            // --- إذا نجح الطلب، فالاستجابة هي الملف نفسه ---
             completeProgress();
             const blob = await response.blob();
             const downloadUrl = window.URL.createObjectURL(blob);
@@ -181,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             a.href = downloadUrl;
             
             const contentDisposition = response.headers.get('content-disposition');
-            let filename = `translated_${file.name.replace(/\.[^/.]+$/, "")}.docx`; // Default filename
+            let filename = `translated_${file.name.replace(/\.[^/.]+$/, "")}.docx`; 
              if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
                 if (filenameMatch && filenameMatch.length > 1) {
@@ -190,15 +185,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             a.download = filename;
             document.body.appendChild(a);
-            a.click(); // بدء التحميل تلقائياً
+            a.click(); 
             
-            // جعل الزر الأخضر قابلاً للضغط لإعادة التحميل
             downloadFileBtn.onclick = () => { a.click(); }; 
 
             setTimeout(() => {
                 a.remove();
                 window.URL.revokeObjectURL(downloadUrl);
-            }, 10000); // تنظيف الرابط بعد 10 ثوان
+            }, 10000);
 
         } catch (error) {
             failProgress(error.message);
@@ -206,7 +200,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleTextTranslation() {
-        // (هذه الدالة للترجمة الفورية للنصوص)
         const text = sourceTextArea.value.trim();
         if (!text) { targetTextArea.value = ''; return; }
         targetTextArea.placeholder = "Translating...";
@@ -228,14 +221,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- THE FIX IS HERE ---
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            resetFileUI(); 
+            // Reset only the UI status, not the file input itself.
+            progressContainer.classList.add('hidden');
+            translateFileBtn.classList.remove('hidden');
+            translateFileBtn.disabled = false;
+            downloadFileBtn.classList.add('hidden');
+            fileErrorMsg.classList.add('hidden');
+            uploadArea.classList.remove('error');
+
+            // Update the display with the new file name.
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
             if(enText) enText.textContent = file.name;
-            if(arText) arText.textContent = '';
+            if(arText) arText.textContent = ''; // Clear the Arabic part.
         }
     });
 
