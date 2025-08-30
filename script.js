@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('file-input');
     const fileNameDisplay = document.getElementById('file-name-display');
     const uploadArea = document.getElementById('upload-area');
-    const fileErrorMsg = document.getElementById('file-error-msg'); // New error message element
+    const fileErrorMsg = document.getElementById('file-error-msg');
     const translateFileBtn = document.getElementById('translate-file-btn');
     const downloadFileBtn = document.getElementById('download-file-btn');
     const progressContainer = document.getElementById('progress-container');
@@ -121,8 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
         translateFileBtn.classList.remove('hidden');
         translateFileBtn.disabled = false;
         downloadFileBtn.classList.add('hidden');
-        fileErrorMsg.classList.add('hidden'); // Hide error message on reset
-        uploadArea.classList.remove('error'); // Remove error class on reset
+        fileErrorMsg.classList.add('hidden');
+        uploadArea.classList.remove('error');
         translatedFileBlob = null;
         translatedFileName = '';
     }
@@ -133,12 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
         fileErrorMsg.classList.add('hidden');
         uploadArea.classList.remove('error');
 
-        // --- NEW VALIDATION LOGIC ---
         if (fileInput.files.length === 0) {
             fileErrorMsg.classList.remove('hidden');
             uploadArea.classList.add('error');
-            setTimeout(() => { uploadArea.classList.remove('error'); }, 500); // Remove shake effect
-            return; // Stop the function
+            setTimeout(() => { uploadArea.classList.remove('error'); }, 500);
+            return;
         }
 
         const file = fileInput.files[0];
@@ -217,9 +216,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- THE FIX IS HERE ---
     fileInput.addEventListener('change', () => {
+        // This function now ONLY handles updating the UI when a file is selected.
+        // The incorrect call to resetFileUI() has been removed.
         if (fileInput.files.length > 0) {
-            resetFileUI();
+            // Hide any previous error messages when a new file is chosen.
+            fileErrorMsg.classList.add('hidden');
+            uploadArea.classList.remove('error');
+            
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
