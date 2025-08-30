@@ -194,9 +194,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- THE DEFINITIVE FIX ---
     fileInput.addEventListener('change', () => {
+        // This function now ONLY handles updating the UI when a file is selected.
+        // The incorrect, aggressive call to resetFileUI() has been permanently removed.
         if (fileInput.files.length > 0) {
-            resetFileUI();
+            // Reset only the necessary parts of the UI for a new selection
+            progressContainer.classList.add('hidden');
+            fileErrorMsg.classList.add('hidden');
+            uploadArea.classList.remove('error');
+            translateFileBtn.classList.remove('hidden');
+            translateFileBtn.disabled = false;
+            downloadFileBtn.classList.add('hidden');
+            progressBar.style.background = '';
+
+            // Display the selected file name
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
