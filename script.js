@@ -7,31 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const openTextButton = document.getElementById('open-text-workspace');
     const backButtons = document.querySelectorAll('.back-btn');
 
-    // --- Navigation Logic ---
-    function openWorkspace(workspaceId) {
-        selectionScreen.style.display = 'none';
-        fileWorkspace.classList.add('hidden');
-        textWorkspace.classList.add('hidden');
-        if (workspaceId === 'file-translation') {
-            fileWorkspace.classList.remove('hidden');
-            fileWorkspace.style.display = 'flex';
-        } else {
-            textWorkspace.classList.remove('hidden');
-            textWorkspace.style.display = 'flex';
-        }
-    }
-
-    function showSelectionScreen() {
-        fileWorkspace.style.display = 'none';
-        textWorkspace.style.display = 'none';
-        selectionScreen.style.display = 'flex';
-        resetFileUI();
-    }
-
-    openDocButton.addEventListener('click', () => openWorkspace('file-translation'));
-    openTextButton.addEventListener('click', () => openWorkspace('text-translation'));
-    backButtons.forEach(button => button.addEventListener('click', showSelectionScreen));
-
     // --- API Endpoints ---
     const FILE_UPLOAD_URL = '/translate-file';
     const STATUS_URL = '/status/';
@@ -53,18 +28,71 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let statusInterval = null;
 
-    // --- Language Population ---
-    const languages = { 'Arabic': 'ar', 'English': 'en', 'French': 'fr', 'German': 'de', 'Spanish': 'es', 'Italian': 'it', 'Portuguese': 'pt', 'Dutch': 'nl', 'Russian': 'ru', 'Turkish': 'tr', 'Japanese': 'ja', 'Korean': 'ko', 'Chinese (Simplified)': 'zh-CN', 'Hindi': 'hi', 'Indonesian': 'id', 'Polish': 'pl', 'Swedish': 'sv', 'Vietnamese': 'vi' };
-    
+    // --- Text Translation Elements ---
+    const sourceTextArea = document.getElementById('source-text');
+    const targetTextArea = document.getElementById('target-text');
+    const copyBtn = document.getElementById('copy-btn');
+
+    // --- THE DEFINITIVE FIX for Language Dropdowns ---
     function populateLanguageSelectors() {
+        const languages = { 'Arabic': 'ar', 'English': 'en', 'French': 'fr', 'German': 'de', 'Spanish': 'es', 'Italian': 'it', 'Portuguese': 'pt', 'Dutch': 'nl', 'Russian': 'ru', 'Turkish': 'tr', 'Japanese': 'ja', 'Korean': 'ko', 'Chinese (Simplified)': 'zh-CN', 'Hindi': 'hi', 'Indonesian': 'id', 'Polish': 'pl', 'Swedish': 'sv', 'Vietnamese': 'vi' };
+        
         document.querySelectorAll('select').forEach(selector => {
-            const isSource = selector.id.includes('source');
-            selector.innerHTML = isSource ? '<option value="auto">Auto-Detect</option>' : '';
-            for (const name in languages) { selector.add(new Option(name, name)); }
+            // Preserve the current value to re-select it after populating
+            const currentValue = selector.value;
+            
+            // Clear existing options
+            selector.innerHTML = '';
+
+            // Add Auto-Detect for source languages
+            if (selector.id.includes('source')) {
+                selector.add(new Option('Auto-Detect', 'auto'));
+            }
+
+            // Add all languages
+            for (const name in languages) {
+                selector.add(new Option(name, name));
+            }
+            
+            // Restore previous value or set default
+            if (currentValue && selector.querySelector(`option[value="${currentValue}"]`)) {
+                 selector.value = currentValue;
+            } else {
+                 if (selector.id.includes('target')) {
+                    selector.value = 'Arabic';
+                 }
+            }
         });
-        document.getElementById('file-target-lang').value = 'Arabic';
-        document.getElementById('text-target-lang').value = 'Arabic';
     }
+
+    // --- Navigation Logic ---
+    function openWorkspace(workspaceId) {
+        selectionScreen.style.display = 'none';
+        fileWorkspace.classList.add('hidden');
+        textWorkspace.classList.add('hidden');
+
+        // Populate selectors every time a workspace is opened to ensure they are correct
+        populateLanguageSelectors();
+
+        if (workspaceId === 'file-translation') {
+            fileWorkspace.classList.remove('hidden');
+            fileWorkspace.style.display = 'flex';
+        } else {
+            textWorkspace.classList.remove('hidden');
+            textWorkspace.style.display = 'flex';
+        }
+    }
+
+    function showSelectionScreen() {
+        fileWorkspace.style.display = 'none';
+        textWorkspace.style.display = 'none';
+        selectionScreen.style.display = 'flex';
+        resetFileUI();
+    }
+
+    openDocButton.addEventListener('click', () => openWorkspace('file-translation'));
+    openTextButton.addEventListener('click', () => openWorkspace('text-translation'));
+    backButtons.forEach(button => button.addEventListener('click', showSelectionScreen));
     
     // --- UI Management ---
     function showProgressUI() {
@@ -72,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = '0%';
         progressText.textContent = 'Uploading...';
         timeEstimate.textContent = 'Please wait';
-        // Animate the progress bar to show activity
         let progress = 0;
         statusInterval = setInterval(() => {
             progress = (progress + 5) % 100;
@@ -122,18 +149,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.status === 'complete') {
-                clearInterval(statusInterval); // Stop polling
+                clearInterval(statusInterval);
                 downloadFileBtn.onclick = () => { window.location.href = DOWNLOAD_URL + jobId; setTimeout(resetFileUI, 1500); };
                 completeProgress();
             } else if (data.status === 'error') {
-                clearInterval(statusInterval); // Stop polling
+                clearInterval(statusInterval);
                 failProgress(data.error || 'An unknown error occurred during processing.');
             } else {
-                // Still processing, the progress bar animation continues
                 progressText.textContent = 'Processing in background...';
             }
         } catch (error) {
-            clearInterval(statusInterval); // Stop polling on network error
+            clearInterval(statusInterval);
             failProgress('Failed to get status from server.');
         }
     }
@@ -154,18 +180,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData(fileForm);
             const response = await fetch(FILE_UPLOAD_URL, { method: 'POST', body: formData });
             
-            if (!response.ok) {
-                throw new Error('Server failed to start the job.');
-            }
+            if (!response.ok) { throw new Error('Server failed to start the job.'); }
             
             const data = await response.json();
             const jobId = data.job_id;
             
-            // Start polling for status
-            clearInterval(statusInterval); // Stop the initial animation
-            progressBar.style.width = '50%'; // Show a more realistic progress
+            clearInterval(statusInterval);
+            progressBar.style.width = '50%';
             progressText.textContent = 'Processing in background...';
-            statusInterval = setInterval(() => checkJobStatus(jobId), 5000); // Check every 5 seconds
+            statusInterval = setInterval(() => checkJobStatus(jobId), 5000);
 
         } catch (error) {
             failProgress(error.message);
@@ -194,12 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- THE DEFINITIVE FIX ---
     fileInput.addEventListener('change', () => {
-        // This function now ONLY handles updating the UI when a file is selected.
-        // The incorrect, aggressive call to resetFileUI() has been permanently removed.
         if (fileInput.files.length > 0) {
-            // Reset only the necessary parts of the UI for a new selection
             progressContainer.classList.add('hidden');
             fileErrorMsg.classList.add('hidden');
             uploadArea.classList.remove('error');
@@ -208,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
             downloadFileBtn.classList.add('hidden');
             progressBar.style.background = '';
 
-            // Display the selected file name
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
@@ -242,6 +260,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // --- Initial Setup ---
-    populateLanguageSelectors();
     showSelectionScreen();
 });
