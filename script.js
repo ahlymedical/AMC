@@ -78,7 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let elapsed = 0;
         progressContainer.classList.remove('hidden');
         progressBar.style.width = '0%';
-        // THE FIX: The incorrect line that cleared the background color has been removed from here.
         progressText.textContent = `Processing... 0%`;
         timeEstimate.textContent = `~${Math.round(estimatedDuration)}s remaining`;
         progressInterval = setInterval(() => {
@@ -103,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function failProgress(errorMessage) {
         clearInterval(progressInterval);
-        progressBar.style.background = 'var(--amc-orange)'; // Turn bar red on error
+        progressBar.style.background = 'var(--amc-orange)';
         progressText.textContent = `Error: ${errorMessage}`;
         timeEstimate.textContent = 'Please try again.';
         translateFileBtn.disabled = false;
@@ -123,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadFileBtn.classList.add('hidden');
         fileErrorMsg.classList.add('hidden');
         uploadArea.classList.remove('error');
-        progressBar.style.background = ''; // Reset background on new file selection
+        progressBar.style.background = '';
         translatedFileBlob = null;
         translatedFileName = '';
     }
@@ -217,9 +216,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- THE DEFINITIVE FIX ---
     fileInput.addEventListener('change', () => {
+        // This function now ONLY handles updating the UI when a file is selected.
+        // The incorrect call to resetFileUI() has been permanently removed.
         if (fileInput.files.length > 0) {
-            resetFileUI(); // Reset UI for new file selection
+            // Reset only the necessary parts of the UI for a new selection,
+            // without clearing the file input itself.
+            progressContainer.classList.add('hidden');
+            fileErrorMsg.classList.add('hidden');
+            uploadArea.classList.remove('error');
+            translateFileBtn.classList.remove('hidden');
+            translateFileBtn.disabled = false;
+            downloadFileBtn.classList.add('hidden');
+            progressBar.style.background = '';
+
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
