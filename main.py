@@ -1,200 +1,272 @@
-import os
-import io
-import traceback
-import time
-import uuid
-import threading
-import google.generativeai as genai
-import docx 
-from docx.document import Document as DocxDocument
-import PyPDF2
-from PIL import Image
-from pptx import Presentation
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Element Selections ---
+    const selectionScreen = document.getElementById('selection-screen');
+    const fileWorkspace = document.getElementById('file-translation');
+    const textWorkspace = document.getElementById('text-translation');
+    const openDocButton = document.getElementById('open-doc-workspace');
+    const openTextButton = document.getElementById('open-text-workspace');
+    const backButtons = document.querySelectorAll('.back-btn');
 
-# --- إعداد التطبيق ---
-app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app)
+    // --- API Endpoints ---
+    const FILE_UPLOAD_URL = '/translate-file';
+    const STATUS_URL = '/status/';
+    const DOWNLOAD_URL = '/download/';
+    const TEXT_TRANSLATE_URL = '/translate-text';
 
-# --- نظام تتبع المهام غير المتزامن ---
-# This dictionary will store the status and results of translation jobs.
-jobs = {}
+    // --- File Translation Elements & State ---
+    const fileForm = document.getElementById('file-upload-form');
+    const fileInput = document.getElementById('file-input');
+    const fileNameDisplay = document.getElementById('file-name-display');
+    const uploadArea = document.getElementById('upload-area');
+    const fileErrorMsg = document.getElementById('file-error-msg');
+    const translateFileBtn = document.getElementById('translate-file-btn');
+    const downloadFileBtn = document.getElementById('download-file-btn');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const timeEstimate = document.getElementById('time-estimate');
+    
+    let statusInterval = null;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
 
-# --- تهيئة نموذج Gemini ---
-model = None
-try:
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY environment variable not set.")
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-pro-latest') 
-    print("✅ Gemini API configured successfully.")
-except Exception as e:
-    print(f"!!!!!! FATAL ERROR during Gemini API setup: {e}")
+    // --- Text Translation Elements ---
+    const sourceTextArea = document.getElementById('source-text');
+    const targetTextArea = document.getElementById('target-text');
+    const copyBtn = document.getElementById('copy-btn');
 
-# --- دوال الترجمة (تعمل في الخلفية) ---
-
-def translate_text_api(text_to_translate, target_lang):
-    if not text_to_translate or not text_to_translate.strip(): return ""
-    try:
-        prompt = f"As a master translator, provide a professional and context-aware translation of the following text into {target_lang}. Your output must be ONLY the translated text. Original Text: \"\"\"{text_to_translate}\"\"\""
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"      - !!!!! [API Error] {e}")
-        return f"[Translation Error: {text_to_translate}]"
-
-def translate_docx_in_place(doc: DocxDocument, target_lang: str):
-    for para in doc.paragraphs:
-        for run in para.runs:
-            if run.text.strip(): run.text = translate_text_api(run.text, target_lang)
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        if run.text.strip(): run.text = translate_text_api(run.text, target_lang)
-    return doc
-
-def translate_pptx_in_place(prs: Presentation, target_lang: str):
-    for slide in prs.slides:
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                for paragraph in shape.text_frame.paragraphs:
-                    for run in paragraph.runs:
-                        if run.text.strip(): run.text = translate_text_api(run.text, target_lang)
-            if shape.has_table:
-                for row in shape.table.rows:
-                    for cell in row.cells:
-                        for paragraph in cell.text_frame.paragraphs:
-                            for run in paragraph.runs:
-                                if run.text.strip(): run.text = translate_text_api(run.text, target_lang)
-    return prs
-
-def read_text_from_pdf(stream):
-    return '\n'.join([page.extract_text() for page in PyPDF2.PdfReader(stream).pages if page.extract_text()])
-
-def create_docx_from_text(text):
-    mem_file = io.BytesIO()
-    doc = docx.Document()
-    doc.add_paragraph(text)
-    doc.save(mem_file)
-    mem_file.seek(0)
-    return mem_file
-
-# --- الدالة الرئيسية التي تعمل في الخلفية ---
-def process_translation_job(job_id, file_bytes, filename, target_lang):
-    """This function runs in a separate thread to perform the long translation task."""
-    print(f"[Job {job_id}] Starting background processing for {filename}.")
-    try:
-        jobs[job_id]['status'] = 'processing'
-        file_stream = io.BytesIO(file_bytes)
+    // --- Language Population ---
+    function populateLanguageSelectors() {
+        const languages = { 'Arabic': 'ar', 'English': 'en', 'French': 'fr', 'German': 'de', 'Spanish': 'es', 'Italian': 'it', 'Portuguese': 'pt', 'Dutch': 'nl', 'Russian': 'ru', 'Turkish': 'tr', 'Japanese': 'ja', 'Korean': 'ko', 'Chinese (Simplified)': 'zh-CN', 'Hindi': 'hi', 'Indonesian': 'id', 'Polish': 'pl', 'Swedish': 'sv', 'Vietnamese': 'vi' };
         
-        mem_file = io.BytesIO()
-        new_filename = f"translated_{os.path.splitext(filename)[0]}"
-        
-        if filename.lower().endswith('.docx'):
-            doc = translate_docx_in_place(docx.Document(file_stream), target_lang)
-            doc.save(mem_file)
-            new_filename += ".docx"
-        elif filename.lower().endswith('.pptx'):
-            prs = translate_pptx_in_place(Presentation(file_stream), target_lang)
-            prs.save(mem_file)
-            new_filename += ".pptx"
-        else:
-            text_to_translate = ""
-            if filename.lower().endswith('.pdf'):
-                text_to_translate = read_text_from_pdf(file_stream)
-            elif filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                response = model.generate_content([f"Extract and translate the text in this image to {target_lang}. Provide only the translation.", Image.open(file_stream)])
-                text_to_translate = response.text
+        document.querySelectorAll('select').forEach(selector => {
+            const currentValue = selector.value;
+            selector.innerHTML = '';
+            if (selector.id.includes('source')) {
+                selector.add(new Option('Auto-Detect', 'auto'));
+            }
+            for (const name in languages) {
+                selector.add(new Option(name, name));
+            }
+            if (currentValue && selector.querySelector(`option[value="${currentValue}"]`)) {
+                 selector.value = currentValue;
+            } else {
+                 if (selector.id.includes('target')) {
+                    selector.value = 'Arabic';
+                 }
+            }
+        });
+    }
+
+    // --- Navigation Logic ---
+    function openWorkspace(workspaceId) {
+        selectionScreen.style.display = 'none';
+        fileWorkspace.classList.add('hidden');
+        textWorkspace.classList.add('hidden');
+        populateLanguageSelectors();
+        if (workspaceId === 'file-translation') {
+            fileWorkspace.classList.remove('hidden');
+            fileWorkspace.style.display = 'flex';
+        } else {
+            textWorkspace.classList.remove('hidden');
+            textWorkspace.style.display = 'flex';
+        }
+    }
+
+    function showSelectionScreen() {
+        fileWorkspace.style.display = 'none';
+        textWorkspace.style.display = 'none';
+        selectionScreen.style.display = 'flex';
+        resetFileUI();
+    }
+
+    openDocButton.addEventListener('click', () => openWorkspace('file-translation'));
+    openTextButton.addEventListener('click', () => openWorkspace('text-translation'));
+    backButtons.forEach(button => button.addEventListener('click', showSelectionScreen));
+    
+    // --- UI Management ---
+    function showProgressUI() {
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '10%'; // Start with a small progress
+        progressBar.style.background = '';
+        progressText.textContent = 'Uploading...';
+        timeEstimate.textContent = 'Please wait';
+        translateFileBtn.classList.add('hidden');
+        downloadFileBtn.classList.add('hidden');
+    }
+
+    function completeProgress() {
+        clearInterval(statusInterval);
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Success!';
+        timeEstimate.textContent = 'Ready to download.';
+        translateFileBtn.classList.add('hidden');
+        downloadFileBtn.classList.remove('hidden');
+    }
+    
+    function failProgress(errorMessage) {
+        clearInterval(statusInterval);
+        progressBar.style.background = 'var(--amc-orange)';
+        progressText.textContent = `Error: ${errorMessage}`;
+        timeEstimate.textContent = 'Please try again.';
+        translateFileBtn.disabled = false;
+        translateFileBtn.classList.remove('hidden');
+        downloadFileBtn.classList.add('hidden');
+    }
+    
+    function resetFileUI() {
+        clearInterval(statusInterval);
+        fileInput.value = ''; 
+        const enText = fileNameDisplay.querySelector('.en b');
+        const arText = fileNameDisplay.querySelector('.ar b');
+        if(enText) enText.textContent = 'Click to upload';
+        if(arText) arText.textContent = 'انقر للرفع';
+        progressContainer.classList.add('hidden');
+        translateFileBtn.classList.remove('hidden');
+        translateFileBtn.disabled = false;
+        downloadFileBtn.classList.add('hidden');
+        fileErrorMsg.classList.add('hidden');
+        uploadArea.classList.remove('error');
+    }
+
+    // --- Asynchronous Job Handling with Retry ---
+    async function checkJobStatus(jobId) {
+        try {
+            const response = await fetch(STATUS_URL + jobId);
+            if (!response.ok) {
+                // If the server returns an error (like 404 or 500), it's a hard failure.
+                throw new Error(`Server returned status ${response.status}`);
+            }
+            const data = await response.json();
+            retryCount = 0; // Reset retry count on a successful check
+
+            // Animate progress
+            const currentProgress = parseFloat(progressBar.style.width) || 50;
+            if (currentProgress < 95) {
+                progressBar.style.width = `${currentProgress + 2}%`;
+            }
+
+            if (data.status === 'complete') {
+                clearInterval(statusInterval);
+                downloadFileBtn.onclick = () => { 
+                    window.location.href = DOWNLOAD_URL + jobId; 
+                    setTimeout(resetFileUI, 2000); 
+                };
+                completeProgress();
+            } else if (data.status === 'error') {
+                clearInterval(statusInterval);
+                failProgress(data.error || 'Processing failed on the server.');
+            }
+            // If still 'processing', do nothing and let the interval call again.
+        } catch (error) {
+            console.error("Status check failed:", error);
+            retryCount++;
+            if (retryCount > MAX_RETRIES) {
+                clearInterval(statusInterval);
+                failProgress('Lost connection to the server.');
+            }
+        }
+    }
+
+    async function handleFileSubmit(e) {
+        e.preventDefault();
+        if (fileInput.files.length === 0) {
+            fileErrorMsg.classList.remove('hidden');
+            uploadArea.classList.add('error');
+            setTimeout(() => { uploadArea.classList.remove('error'); }, 500);
+            return;
+        }
+
+        translateFileBtn.disabled = true;
+        showProgressUI();
+
+        try {
+            const formData = new FormData(fileForm);
+            const response = await fetch(FILE_UPLOAD_URL, { method: 'POST', body: formData });
             
-            if not text_to_translate.strip(): raise ValueError("Could not extract text from file.")
+            if (!response.ok) { throw new Error('Server failed to accept the file.'); }
             
-            translated_text = translate_text_api(text_to_translate, target_lang)
-            mem_file = create_docx_from_text(translated_text)
-            new_filename += ".docx"
+            const data = await response.json();
+            if (!data.job_id) { throw new Error('Server did not return a job ID.'); }
 
-        # Store the result and mark as complete
-        jobs[job_id]['result'] = mem_file.getvalue()
-        jobs[job_id]['filename'] = new_filename
-        jobs[job_id]['status'] = 'complete'
-        print(f"[Job {job_id}] Processing complete.")
+            const jobId = data.job_id;
+            
+            progressBar.style.width = '50%';
+            progressText.textContent = 'Processing in background...';
+            retryCount = 0; // Reset for new job
+            
+            // Clear any old interval and start a new one
+            clearInterval(statusInterval);
+            statusInterval = setInterval(() => checkJobStatus(jobId), 3000); // Check every 3 seconds
 
-    except Exception as e:
-        print(f"!!!!!! [Job {job_id}] Error during background processing: {e}")
-        traceback.print_exc()
-        jobs[job_id]['status'] = 'error'
-        jobs[job_id]['error_message'] = str(e)
+        } catch (error) {
+            failProgress(error.message);
+        }
+    }
 
-# --- مسارات التطبيق (API Endpoints) ---
+    async function handleTextTranslation() {
+        const text = sourceTextArea.value.trim();
+        if (!text) { targetTextArea.value = ''; return; }
+        targetTextArea.placeholder = "Translating...";
+        try {
+            const response = await fetch(TEXT_TRANSLATE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    source_lang: document.getElementById('text-source-lang').value,
+                    target_lang: document.getElementById('text-target-lang').value
+                })
+            });
+            if (!response.ok) { throw new Error('Server error'); }
+            const data = await response.json();
+            targetTextArea.value = data.translated_text;
+        } catch (error) {
+            targetTextArea.value = `Error: ${error.message}`;
+        }
+    }
 
-@app.route('/')
-def serve_index():
-    return app.send_static_file('index.html')
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            progressContainer.classList.add('hidden');
+            fileErrorMsg.classList.add('hidden');
+            uploadArea.classList.remove('error');
+            translateFileBtn.classList.remove('hidden');
+            translateFileBtn.disabled = false;
+            downloadFileBtn.classList.add('hidden');
+            
+            const file = fileInput.files[0];
+            const enText = fileNameDisplay.querySelector('.en b');
+            const arText = fileNameDisplay.querySelector('.ar b');
+            if(enText) enText.textContent = file.name;
+            if(arText) arText.textContent = '';
+        }
+    });
 
-@app.route('/translate-file', methods=['POST'])
-def upload_and_start_translation():
-    """Step 1: Receives the file, starts a background job, and returns a job ID immediately."""
-    if not model: return jsonify({"error": "API service is not configured."}), 500
-    if 'file' not in request.files: return jsonify({"error": "No file part."}), 400
-    file = request.files['file']
-    if file.filename == '': return jsonify({"error": "No selected file."}), 400
+    // --- Event Listeners ---
+    uploadArea.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.remove('dragover'); });
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            fileInput.dispatchEvent(new Event('change'));
+        }
+    });
+
+    fileForm.addEventListener('submit', handleFileSubmit);
     
-    job_id = str(uuid.uuid4())
-    filename = secure_filename(file.filename)
-    target_lang = request.form.get('target_lang', 'English')
-    file_bytes = file.read()
-
-    jobs[job_id] = {'status': 'pending'}
+    let debounceTimer;
+    sourceTextArea.addEventListener('input', () => { 
+        clearTimeout(debounceTimer); 
+        debounceTimer = setTimeout(handleTextTranslation, 500); 
+    });
+    copyBtn.addEventListener('click', () => { 
+        navigator.clipboard.writeText(targetTextArea.value);
+    });
     
-    # Start the background thread
-    thread = threading.Thread(target=process_translation_job, args=(job_id, file_bytes, filename, target_lang))
-    thread.start()
-    
-    print(f"[Job {job_id}] Created for file {filename}. Returning job ID to client.")
-    return jsonify({'job_id': job_id})
-
-@app.route('/status/<job_id>', methods=['GET'])
-def get_job_status(job_id):
-    """Step 2: Client polls this endpoint to check the job status."""
-    job = jobs.get(job_id)
-    if not job: return jsonify({'status': 'not_found'}), 404
-    
-    response = {'status': job['status']}
-    if job['status'] == 'error':
-        response['error'] = job.get('error_message', 'An unknown error occurred.')
-    
-    return jsonify(response)
-
-@app.route('/download/<job_id>', methods=['GET'])
-def download_translated_file(job_id):
-    """Step 3: Client calls this endpoint to download the final file."""
-    job = jobs.get(job_id)
-    if not job or job['status'] != 'complete':
-        return "Job not found or not complete.", 404
-    
-    file_bytes = job['result']
-    filename = job['filename']
-    
-    # Clean up the job from memory after download
-    del jobs[job_id]
-    
-    return send_file(io.BytesIO(file_bytes), as_attachment=True, download_name=filename)
-
-@app.route('/translate-text', methods=['POST'])
-def translate_text_handler():
-    # This remains synchronous as it's a very fast operation.
-    if not model: return jsonify({"error": "API service is not configured."}), 500
-    data = request.get_json()
-    text = data.get('text')
-    if not text: return jsonify({"error": "No text provided."}), 400
-    target_lang = data.get('target_lang', 'English')
-    translated_text = translate_text_api(text, target_lang)
-    return jsonify({"translated_text": translated_text})
-
-if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 8080))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    // --- Initial Setup ---
+    showSelectionScreen();
+});
