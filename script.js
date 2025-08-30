@@ -8,12 +8,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const backButtons = document.querySelectorAll('.back-btn');
 
     // --- API Endpoints ---
-    const FILE_UPLOAD_URL = '/translate-file';
-    const STATUS_URL = '/status/';
-    const DOWNLOAD_URL = '/download/';
+    const FILE_TRANSLATE_URL = '/translate-file';
     const TEXT_TRANSLATE_URL = '/translate-text';
 
-    // --- File Translation Elements & State ---
+    // --- File Translation Elements ---
     const fileForm = document.getElementById('file-upload-form');
     const fileInput = document.getElementById('file-input');
     const fileNameDisplay = document.getElementById('file-name-display');
@@ -26,35 +24,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressText = document.getElementById('progress-text');
     const timeEstimate = document.getElementById('time-estimate');
     
-    let statusInterval = null;
+    let progressInterval = null;
 
     // --- Text Translation Elements ---
     const sourceTextArea = document.getElementById('source-text');
     const targetTextArea = document.getElementById('target-text');
     const copyBtn = document.getElementById('copy-btn');
 
-    // --- THE DEFINITIVE FIX for Language Dropdowns ---
+    // --- Language Population ---
     function populateLanguageSelectors() {
         const languages = { 'Arabic': 'ar', 'English': 'en', 'French': 'fr', 'German': 'de', 'Spanish': 'es', 'Italian': 'it', 'Portuguese': 'pt', 'Dutch': 'nl', 'Russian': 'ru', 'Turkish': 'tr', 'Japanese': 'ja', 'Korean': 'ko', 'Chinese (Simplified)': 'zh-CN', 'Hindi': 'hi', 'Indonesian': 'id', 'Polish': 'pl', 'Swedish': 'sv', 'Vietnamese': 'vi' };
         
         document.querySelectorAll('select').forEach(selector => {
-            // Preserve the current value to re-select it after populating
             const currentValue = selector.value;
-            
-            // Clear existing options
             selector.innerHTML = '';
-
-            // Add Auto-Detect for source languages
             if (selector.id.includes('source')) {
                 selector.add(new Option('Auto-Detect', 'auto'));
             }
-
-            // Add all languages
             for (const name in languages) {
                 selector.add(new Option(name, name));
             }
-            
-            // Restore previous value or set default
             if (currentValue && selector.querySelector(`option[value="${currentValue}"]`)) {
                  selector.value = currentValue;
             } else {
@@ -70,10 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectionScreen.style.display = 'none';
         fileWorkspace.classList.add('hidden');
         textWorkspace.classList.add('hidden');
-
-        // Populate selectors every time a workspace is opened to ensure they are correct
         populateLanguageSelectors();
-
         if (workspaceId === 'file-translation') {
             fileWorkspace.classList.remove('hidden');
             fileWorkspace.style.display = 'flex';
@@ -95,29 +81,44 @@ document.addEventListener('DOMContentLoaded', () => {
     backButtons.forEach(button => button.addEventListener('click', showSelectionScreen));
     
     // --- UI Management ---
-    function showProgressUI() {
+    function startProgressSimulation(fileSize) {
+        // (هذه الدالة تظهر شريط التقدم وتحاكي عملية التحميل)
+        const estimatedDuration = 10 + (fileSize / 1024 / 1024) * 15; // Base 10s + 15s per MB
+        let progress = 0;
+        let elapsed = 0;
         progressContainer.classList.remove('hidden');
         progressBar.style.width = '0%';
-        progressText.textContent = 'Uploading...';
-        timeEstimate.textContent = 'Please wait';
-        let progress = 0;
-        statusInterval = setInterval(() => {
-            progress = (progress + 5) % 100;
-            progressBar.style.width = `${progress}%`;
-        }, 500);
+        progressBar.style.background = '';
+        progressText.textContent = `Processing... 0%`;
+        timeEstimate.textContent = `~${Math.round(estimatedDuration)}s remaining`;
+        translateFileBtn.classList.add('hidden');
+        downloadFileBtn.classList.add('hidden');
+
+        progressInterval = setInterval(() => {
+            elapsed++;
+            progress = Math.min(95, (elapsed / estimatedDuration) * 100);
+            progressBar.style.width = `${progress.toFixed(2)}%`;
+            progressText.textContent = `Processing... ${Math.round(progress)}%`;
+            const remaining = Math.round(estimatedDuration - elapsed);
+            timeEstimate.textContent = remaining > 0 ? `~${remaining}s remaining` : 'Finalizing...';
+            if (progress >= 95) { clearInterval(progressInterval); }
+        }, 1000);
     }
 
     function completeProgress() {
-        clearInterval(statusInterval);
+        // (هذه الدالة تظهر عند اكتمال الترجمة بنجاح)
+        clearInterval(progressInterval);
         progressBar.style.width = '100%';
         progressText.textContent = 'Success!';
-        timeEstimate.textContent = 'Ready to download.';
+        timeEstimate.textContent = 'Download will start automatically.';
         translateFileBtn.classList.add('hidden');
         downloadFileBtn.classList.remove('hidden');
     }
     
     function failProgress(errorMessage) {
-        clearInterval(statusInterval);
+        // (هذه الدالة تظهر عند حدوث خطأ)
+        clearInterval(progressInterval);
+        progressContainer.classList.remove('hidden');
         progressBar.style.background = 'var(--amc-orange)';
         progressText.textContent = `Error: ${errorMessage}`;
         timeEstimate.textContent = 'Please try again.';
@@ -127,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function resetFileUI() {
-        clearInterval(statusInterval);
+        clearInterval(progressInterval);
         fileInput.value = ''; 
         const enText = fileNameDisplay.querySelector('.en b');
         const arText = fileNameDisplay.querySelector('.ar b');
@@ -139,31 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadFileBtn.classList.add('hidden');
         fileErrorMsg.classList.add('hidden');
         uploadArea.classList.remove('error');
-        progressBar.style.background = '';
     }
 
-    // --- Asynchronous Job Handling ---
-    async function checkJobStatus(jobId) {
-        try {
-            const response = await fetch(STATUS_URL + jobId);
-            const data = await response.json();
-
-            if (data.status === 'complete') {
-                clearInterval(statusInterval);
-                downloadFileBtn.onclick = () => { window.location.href = DOWNLOAD_URL + jobId; setTimeout(resetFileUI, 1500); };
-                completeProgress();
-            } else if (data.status === 'error') {
-                clearInterval(statusInterval);
-                failProgress(data.error || 'An unknown error occurred during processing.');
-            } else {
-                progressText.textContent = 'Processing in background...';
-            }
-        } catch (error) {
-            clearInterval(statusInterval);
-            failProgress('Failed to get status from server.');
-        }
-    }
-
+    // --- Synchronous File Handling ---
     async function handleFileSubmit(e) {
         e.preventDefault();
         if (fileInput.files.length === 0) {
@@ -173,22 +152,53 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const file = fileInput.files[0];
         translateFileBtn.disabled = true;
-        showProgressUI();
+        startProgressSimulation(file.size);
 
         try {
             const formData = new FormData(fileForm);
-            const response = await fetch(FILE_UPLOAD_URL, { method: 'POST', body: formData });
+            const response = await fetch(FILE_TRANSLATE_URL, { method: 'POST', body: formData });
+
+            if (!response.ok) {
+                // إذا فشل الطلب، حاول قراءة رسالة الخطأ كـ JSON
+                let errorMsg = 'An unknown server error occurred.';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || `HTTP error! status: ${response.status}`;
+                } catch (jsonError) {
+                    errorMsg = 'Server returned an invalid response. Please try again.';
+                }
+                throw new Error(errorMsg);
+            }
+
+            // --- إذا نجح الطلب، فالاستجابة هي الملف نفسه ---
+            completeProgress();
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = downloadUrl;
             
-            if (!response.ok) { throw new Error('Server failed to start the job.'); }
+            const contentDisposition = response.headers.get('content-disposition');
+            let filename = `translated_${file.name.replace(/\.[^/.]+$/, "")}.docx`; // Default filename
+             if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (filenameMatch && filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click(); // بدء التحميل تلقائياً
             
-            const data = await response.json();
-            const jobId = data.job_id;
-            
-            clearInterval(statusInterval);
-            progressBar.style.width = '50%';
-            progressText.textContent = 'Processing in background...';
-            statusInterval = setInterval(() => checkJobStatus(jobId), 5000);
+            // جعل الزر الأخضر قابلاً للضغط لإعادة التحميل
+            downloadFileBtn.onclick = () => { a.click(); }; 
+
+            setTimeout(() => {
+                a.remove();
+                window.URL.revokeObjectURL(downloadUrl);
+            }, 10000); // تنظيف الرابط بعد 10 ثوان
 
         } catch (error) {
             failProgress(error.message);
@@ -196,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleTextTranslation() {
+        // (هذه الدالة للترجمة الفورية للنصوص)
         const text = sourceTextArea.value.trim();
         if (!text) { targetTextArea.value = ''; return; }
         targetTextArea.placeholder = "Translating...";
@@ -219,14 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            progressContainer.classList.add('hidden');
-            fileErrorMsg.classList.add('hidden');
-            uploadArea.classList.remove('error');
-            translateFileBtn.classList.remove('hidden');
-            translateFileBtn.disabled = false;
-            downloadFileBtn.classList.add('hidden');
-            progressBar.style.background = '';
-
+            resetFileUI(); 
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
