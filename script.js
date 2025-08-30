@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let elapsed = 0;
         progressContainer.classList.remove('hidden');
         progressBar.style.width = '0%';
-        progressBar.style.background = '';
+        // THE FIX: The incorrect line that cleared the background color has been removed from here.
         progressText.textContent = `Processing... 0%`;
         timeEstimate.textContent = `~${Math.round(estimatedDuration)}s remaining`;
         progressInterval = setInterval(() => {
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function failProgress(errorMessage) {
         clearInterval(progressInterval);
-        progressBar.style.background = 'var(--amc-orange)';
+        progressBar.style.background = 'var(--amc-orange)'; // Turn bar red on error
         progressText.textContent = `Error: ${errorMessage}`;
         timeEstimate.textContent = 'Please try again.';
         translateFileBtn.disabled = false;
@@ -123,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadFileBtn.classList.add('hidden');
         fileErrorMsg.classList.add('hidden');
         uploadArea.classList.remove('error');
+        progressBar.style.background = ''; // Reset background on new file selection
         translatedFileBlob = null;
         translatedFileName = '';
     }
@@ -216,15 +217,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- THE FIX IS HERE ---
     fileInput.addEventListener('change', () => {
-        // This function now ONLY handles updating the UI when a file is selected.
-        // The incorrect call to resetFileUI() has been removed.
         if (fileInput.files.length > 0) {
-            // Hide any previous error messages when a new file is chosen.
-            fileErrorMsg.classList.add('hidden');
-            uploadArea.classList.remove('error');
-            
+            resetFileUI(); // Reset UI for new file selection
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
