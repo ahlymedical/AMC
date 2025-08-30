@@ -155,7 +155,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const errorData = await response.json();
                     errorMsg = errorData.error || `HTTP error! status: ${response.status}`;
                 } catch (jsonError) {
-                    errorMsg = 'Server returned an invalid response. Please try again.';
+                    // This error means the server timed out and sent an HTML error page instead of JSON.
+                    errorMsg = 'Server timed out or returned an invalid response. Please try again.';
                 }
                 throw new Error(errorMsg);
             }
@@ -216,13 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- THE DEFINITIVE FIX ---
     fileInput.addEventListener('change', () => {
-        // This function now ONLY handles updating the UI when a file is selected.
-        // The incorrect call to resetFileUI() has been permanently removed.
         if (fileInput.files.length > 0) {
-            // Reset only the necessary parts of the UI for a new selection,
-            // without clearing the file input itself.
             progressContainer.classList.add('hidden');
             fileErrorMsg.classList.add('hidden');
             uploadArea.classList.remove('error');
