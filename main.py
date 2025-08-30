@@ -87,7 +87,6 @@ def translate_docx_in_place(doc: DocxDocument, target_lang: str):
 
 def translate_pptx_in_place(prs: Presentation, target_lang: str):
     """
-    [ميزة جديدة]
     Translates PPTX text run-by-run to preserve all formatting, layout, and images.
     """
     print("بدء الترجمة المباشرة لملف PowerPoint (مع الحفاظ على التصميم)...")
