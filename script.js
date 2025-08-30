@@ -33,7 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
     backButtons.forEach(button => button.addEventListener('click', showSelectionScreen));
 
     // --- API Endpoints ---
-    const FILE_TRANSLATE_URL = '/translate-file';
+    const FILE_UPLOAD_URL = '/translate-file';
+    const STATUS_URL = '/status/';
+    const DOWNLOAD_URL = '/download/';
     const TEXT_TRANSLATE_URL = '/translate-text';
 
     // --- File Translation Elements & State ---
@@ -49,15 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressText = document.getElementById('progress-text');
     const timeEstimate = document.getElementById('time-estimate');
     
-    let progressInterval = null;
-    let translatedFileBlob = null;
-    let translatedFileName = '';
+    let statusInterval = null;
 
-    // --- Text Translation Elements ---
-    const sourceTextArea = document.getElementById('source-text');
-    const targetTextArea = document.getElementById('target-text');
-    const copyBtn = document.getElementById('copy-btn');
-    
     // --- Language Population ---
     const languages = { 'Arabic': 'ar', 'English': 'en', 'French': 'fr', 'German': 'de', 'Spanish': 'es', 'Italian': 'it', 'Portuguese': 'pt', 'Dutch': 'nl', 'Russian': 'ru', 'Turkish': 'tr', 'Japanese': 'ja', 'Korean': 'ko', 'Chinese (Simplified)': 'zh-CN', 'Hindi': 'hi', 'Indonesian': 'id', 'Polish': 'pl', 'Swedish': 'sv', 'Vietnamese': 'vi' };
     
@@ -71,28 +66,22 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('text-target-lang').value = 'Arabic';
     }
     
-    // --- File Translation UI Management ---
-    function startProgressSimulation(fileSize) {
-        const estimatedDuration = 10 + (fileSize / 1024 / 1024) * 15;
-        let progress = 0;
-        let elapsed = 0;
+    // --- UI Management ---
+    function showProgressUI() {
         progressContainer.classList.remove('hidden');
         progressBar.style.width = '0%';
-        progressText.textContent = `Processing... 0%`;
-        timeEstimate.textContent = `~${Math.round(estimatedDuration)}s remaining`;
-        progressInterval = setInterval(() => {
-            elapsed++;
-            progress = Math.min(95, (elapsed / estimatedDuration) * 100);
-            progressBar.style.width = `${progress.toFixed(2)}%`;
-            progressText.textContent = `Processing... ${Math.round(progress)}%`;
-            const remaining = Math.round(estimatedDuration - elapsed);
-            timeEstimate.textContent = remaining > 0 ? `~${remaining}s remaining` : 'Finalizing...';
-            if (progress >= 95) { clearInterval(progressInterval); }
-        }, 1000);
+        progressText.textContent = 'Uploading...';
+        timeEstimate.textContent = 'Please wait';
+        // Animate the progress bar to show activity
+        let progress = 0;
+        statusInterval = setInterval(() => {
+            progress = (progress + 5) % 100;
+            progressBar.style.width = `${progress}%`;
+        }, 500);
     }
 
     function completeProgress() {
-        clearInterval(progressInterval);
+        clearInterval(statusInterval);
         progressBar.style.width = '100%';
         progressText.textContent = 'Success!';
         timeEstimate.textContent = 'Ready to download.';
@@ -101,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function failProgress(errorMessage) {
-        clearInterval(progressInterval);
+        clearInterval(statusInterval);
         progressBar.style.background = 'var(--amc-orange)';
         progressText.textContent = `Error: ${errorMessage}`;
         timeEstimate.textContent = 'Please try again.';
@@ -111,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function resetFileUI() {
+        clearInterval(statusInterval);
         fileInput.value = ''; 
         const enText = fileNameDisplay.querySelector('.en b');
         const arText = fileNameDisplay.querySelector('.ar b');
@@ -123,16 +113,33 @@ document.addEventListener('DOMContentLoaded', () => {
         fileErrorMsg.classList.add('hidden');
         uploadArea.classList.remove('error');
         progressBar.style.background = '';
-        translatedFileBlob = null;
-        translatedFileName = '';
     }
 
-    // --- Event Handlers ---
+    // --- Asynchronous Job Handling ---
+    async function checkJobStatus(jobId) {
+        try {
+            const response = await fetch(STATUS_URL + jobId);
+            const data = await response.json();
+
+            if (data.status === 'complete') {
+                clearInterval(statusInterval); // Stop polling
+                downloadFileBtn.onclick = () => { window.location.href = DOWNLOAD_URL + jobId; setTimeout(resetFileUI, 1500); };
+                completeProgress();
+            } else if (data.status === 'error') {
+                clearInterval(statusInterval); // Stop polling
+                failProgress(data.error || 'An unknown error occurred during processing.');
+            } else {
+                // Still processing, the progress bar animation continues
+                progressText.textContent = 'Processing in background...';
+            }
+        } catch (error) {
+            clearInterval(statusInterval); // Stop polling on network error
+            failProgress('Failed to get status from server.');
+        }
+    }
+
     async function handleFileSubmit(e) {
         e.preventDefault();
-        fileErrorMsg.classList.add('hidden');
-        uploadArea.classList.remove('error');
-
         if (fileInput.files.length === 0) {
             fileErrorMsg.classList.remove('hidden');
             uploadArea.classList.add('error');
@@ -140,61 +147,34 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const file = fileInput.files[0];
-        const formData = new FormData(fileForm);
-        
         translateFileBtn.disabled = true;
-        downloadFileBtn.classList.add('hidden');
-        startProgressSimulation(file.size);
+        showProgressUI();
 
         try {
-            const response = await fetch(FILE_TRANSLATE_URL, { method: 'POST', body: formData });
+            const formData = new FormData(fileForm);
+            const response = await fetch(FILE_UPLOAD_URL, { method: 'POST', body: formData });
+            
             if (!response.ok) {
-                let errorMsg = 'An unknown server error occurred.';
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || `HTTP error! status: ${response.status}`;
-                } catch (jsonError) {
-                    // This error means the server timed out and sent an HTML error page instead of JSON.
-                    errorMsg = 'Server timed out or returned an invalid response. Please try again.';
-                }
-                throw new Error(errorMsg);
+                throw new Error('Server failed to start the job.');
             }
             
-            translatedFileBlob = await response.blob();
-            const contentDisposition = response.headers.get('content-disposition');
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-                translatedFileName = (filenameMatch && filenameMatch.length > 1) ? filenameMatch[1] : `translated_${file.name}`;
-            } else {
-                translatedFileName = `translated_${file.name}`;
-            }
-            completeProgress();
+            const data = await response.json();
+            const jobId = data.job_id;
+            
+            // Start polling for status
+            clearInterval(statusInterval); // Stop the initial animation
+            progressBar.style.width = '50%'; // Show a more realistic progress
+            progressText.textContent = 'Processing in background...';
+            statusInterval = setInterval(() => checkJobStatus(jobId), 5000); // Check every 5 seconds
+
         } catch (error) {
             failProgress(error.message);
         }
     }
 
-    function handleFileDownload() {
-        if (!translatedFileBlob || !translatedFileName) return;
-        const downloadUrl = window.URL.createObjectURL(translatedFileBlob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = downloadUrl;
-        a.download = translatedFileName;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(downloadUrl);
-        a.remove();
-        setTimeout(resetFileUI, 1500);
-    }
-
     async function handleTextTranslation() {
         const text = sourceTextArea.value.trim();
-        if (!text) {
-            targetTextArea.value = '';
-            return;
-        }
+        if (!text) { targetTextArea.value = ''; return; }
         targetTextArea.placeholder = "Translating...";
         try {
             const response = await fetch(TEXT_TRANSLATE_URL, {
@@ -206,10 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     target_lang: document.getElementById('text-target-lang').value
                 })
             });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Server error');
-            }
+            if (!response.ok) { throw new Error('Server error'); }
             const data = await response.json();
             targetTextArea.value = data.translated_text;
         } catch (error) {
@@ -219,14 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            progressContainer.classList.add('hidden');
-            fileErrorMsg.classList.add('hidden');
-            uploadArea.classList.remove('error');
-            translateFileBtn.classList.remove('hidden');
-            translateFileBtn.disabled = false;
-            downloadFileBtn.classList.add('hidden');
-            progressBar.style.background = '';
-
+            resetFileUI();
             const file = fileInput.files[0];
             const enText = fileNameDisplay.querySelector('.en b');
             const arText = fileNameDisplay.querySelector('.ar b');
@@ -249,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     fileForm.addEventListener('submit', handleFileSubmit);
-    downloadFileBtn.addEventListener('click', handleFileDownload);
     
     let debounceTimer;
     sourceTextArea.addEventListener('input', () => { 
